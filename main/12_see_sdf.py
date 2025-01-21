@@ -249,11 +249,12 @@ def show_result_in_polyscope(
     # ----------------------------------- Start and add the Bunny MESH
     ps.init()
     ps_mesh = ps.register_surface_mesh("Bunny", vertices, faces)
+    ps_mesh.set_color((1.0, 0.5, 0.0))
 
     # ------------------------------------ Add the point cloud where sdf are calculated
     NUMBER_OF_POINTS = min(20_000, len(filtered_points))
     ps_cloud = ps.register_point_cloud("Filtered Points", filtered_points[:NUMBER_OF_POINTS], radius=0.0025)
-    ps_cloud.add_scalar_quantity("Signed Distances", filtered_signed_distances[:NUMBER_OF_POINTS])
+    ps_cloud.add_scalar_quantity("Signed Distances", filtered_signed_distances[:NUMBER_OF_POINTS], enabled=True)
 
     # ------------------------------------- Add the lines connecting the point cloud to the surface
     NUMBER_OF_LINES = min(100, len(filtered_points))
@@ -277,7 +278,7 @@ def show_result_in_polyscope(
 
     # Optional: Customize appearance of the lines
     ps_lines.set_radius(0.001)  # Adjust line thickness
-    ps_lines.set_color((0.0, 1.0, 1.0))  # Cyan color for the lines
+    ps_lines.set_color((1.0, 0.0, 0.5))  # Cyan color for the lines
 
     # -------------------------------------------- Add a single point to represent the sphere's center
     ps_finger = ps.register_point_cloud("Finger Position", np.array([finger_position]), radius=3 * R)
@@ -326,6 +327,8 @@ def get_surface_mesh_super(DISPLACEMENT_FILE):
     deformed_vertices_array = np.array(deformed_vertices_list)
     deformed_faces_array = np.array(deformed_faces_list)
 
+    print(type(deformed_vertices_array))
+
     return deformed_vertices_array, deformed_faces_array, time_steps
 
 
@@ -347,17 +350,20 @@ def main(finger_index, time_index, sdf_only):
     displacement_file = f"{DISPLACEMENT_DIRECTORY}/displacement_{finger_index}.h5"
     vertices_array, faces_array, time_steps = get_surface_mesh_super(displacement_file)
 
+    print(f"np.shape(vertices_array) = {np.shape(vertices_array)}")
+    print(f"vertices_array = \n{vertices_array}\n")
     faces = faces_array[0]
 
     points, sdf = load_sdf_data(finger_index, time_index, sdf_only)
     print(f"np.shape(points) = {np.shape(points)}")
     print(f"points = \n{points}\n")
 
+    print(f"type(vertices_array = {type(vertices_array)})")
     print(f"np.shape(sdf) = {np.shape(sdf)}")
     print(f"sdf = \n{sdf}\n")
 
     # Swap Y and Z because poylscope uses weird data
-    vertices_array[:, [1, 2]] = vertices_array[:, [2, 1]]
+    vertices_array[:, :, [1, 2]] = vertices_array[:, :, [2, 1]]
     points[:, [1, 2]] = points[:, [2, 1]]
 
     print(f"Loaded points shape: {points.shape}")
@@ -379,7 +385,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Resolve indices
-    finger_index = args.finger_index if args.finger_index is not None else 0
-    time_index = args.time_index if args.time_index is not None else 90
+    finger_index = args.finger_index if args.finger_index is not None else 730
+    time_index = args.time_index if args.time_index is not None else 100
 
     main(finger_index, time_index, args.sdf_only)
