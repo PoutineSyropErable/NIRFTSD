@@ -238,8 +238,8 @@ def get_surface_mesh(points: np.ndarray, connectivity: np.ndarray):
 
 
 def show_result_in_polyscope(
-    mesh_points,
-    mesh_connectivity,
+    vertices,
+    faces,
     filtered_points,
     filtered_signed_distances,
     finger_position,
@@ -248,7 +248,7 @@ def show_result_in_polyscope(
 
     # ----------------------------------- Start and add the Bunny MESH
     ps.init()
-    ps_mesh = ps.register_surface_mesh("Bunny", mesh_points, mesh_connectivity)
+    ps_mesh = ps.register_surface_mesh("Bunny", vertices, faces)
 
     # ------------------------------------ Add the point cloud where sdf are calculated
     NUMBER_OF_POINTS = min(20_000, len(filtered_points))
@@ -260,7 +260,6 @@ def show_result_in_polyscope(
 
     # Calculate the nearest points only for the points used in the lines
     line_filtered_points = filtered_points[:NUMBER_OF_LINES]
-    vertices, faces = get_surface_mesh(mesh_points, mesh_connectivity)
     _, _, filtered_nearest = igl.signed_distance(line_filtered_points, vertices, faces)
 
     # Combine filtered points and their nearest points into a single array
@@ -285,11 +284,11 @@ def show_result_in_polyscope(
     ps_finger.set_color((1.0, 0.0, 0.0))  # Red color for the point
 
     # Compute and draw the larger bounding box
-    b_min, b_max = compute_bounding_box(mesh_points)
+    b_min, b_max = compute_bounding_box(vertices)
     draw_bounding_box(b_min, b_max, "Large Bounding Box", color=(0.0, 1.0, 0.0), radius=0.002)
 
     # Compute and draw the smaller bounding box
-    small_b_min, small_b_max = compute_small_bounding_box(mesh_points)
+    small_b_min, small_b_max = compute_small_bounding_box(vertices)
     draw_bounding_box(
         small_b_min,
         small_b_max,
@@ -310,6 +309,26 @@ def validate_indices(index, finger_index):
         )
 
 
+def get_surface_mesh_super(DISPLACEMENT_FILE):
+    points, connectivity, time_steps, deformations = load_mesh_and_deformations(xdmf_file=BUNNY_FILE, h5_file=DISPLACEMENT_FILE)
+    print(f"np.shape(points) = {np.shape(points)}")
+    print(f"np.shape(connectivity) = {np.shape(connectivity)}")
+    print(f"np.shape(time_steps) = {np.shape(time_steps)}")
+    print(f"np.shape(deformations) = {np.shape(deformations)}")
+
+    deformed_vertices_list, deformed_faces_list = [], []
+    for deformation in deformations:
+        deformed_surface_vertices, deformed_surfaces_faces = get_surface_mesh(points + deformation, connectivity)
+        deformed_vertices_list.append(deformed_surface_vertices)
+        deformed_faces_list.append(deformed_surfaces_faces)
+        print(np.shape(deformed_surface_vertices), np.shape(deformed_surfaces_faces))
+
+    deformed_vertices_array = np.array(deformed_vertices_list)
+    deformed_faces_array = np.array(deformed_faces_list)
+
+    return deformed_vertices_array, deformed_faces_array, time_steps
+
+
 # Main function
 def main(finger_index, time_index, sdf_only):
     print(f"Using displacement index: {finger_index}")
@@ -326,15 +345,10 @@ def main(finger_index, time_index, sdf_only):
 
     # Construct file paths
     displacement_file = f"{DISPLACEMENT_DIRECTORY}/displacement_{finger_index}.h5"
-    mesh_points, mesh_connectivity, time_steps, deformations = load_mesh_and_deformations(xdmf_file=BUNNY_FILE, h5_file=displacement_file)
+    vertices_array, faces_array, time_steps = get_surface_mesh_super(displacement_file)
 
-    print(f"np.shape(mesh_points) = {np.shape(mesh_points)}")
-    print(f"mesh_points = \n{mesh_points}\n")
+    faces = faces_array[0]
 
-    print(f"np.shape(mesh_connectivity) = {np.shape(mesh_connectivity)}")
-    print(f"mesh_connectivity = \n{mesh_connectivity}\n")
-
-    # Load precomputed SDF data
     points, sdf = load_sdf_data(finger_index, time_index, sdf_only)
     print(f"np.shape(points) = {np.shape(points)}")
     print(f"points = \n{points}\n")
@@ -343,13 +357,13 @@ def main(finger_index, time_index, sdf_only):
     print(f"sdf = \n{sdf}\n")
 
     # Swap Y and Z because poylscope uses weird data
-    mesh_points[:, [1, 2]] = mesh_points[:, [2, 1]]
+    vertices_array[:, [1, 2]] = vertices_array[:, [2, 1]]
     points[:, [1, 2]] = points[:, [2, 1]]
 
     print(f"Loaded points shape: {points.shape}")
     print(f"Loaded SDF shape: {sdf.shape}")
 
-    show_result_in_polyscope(mesh_points, mesh_connectivity, points, sdf, finger_position, R)
+    show_result_in_polyscope(vertices_array[time_index], faces, points, sdf, finger_position, R)
 
 
 if __name__ == "__main__":
