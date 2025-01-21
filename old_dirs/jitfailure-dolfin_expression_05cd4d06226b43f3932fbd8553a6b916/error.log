@@ -1,0 +1,14 @@
+/tmp/tmpp9tw1qik/dolfin_expression_05cd4d06226b43f3932fbd8553a6b916.cpp: In member function 'virtual void dolfin::dolfin_expression_05cd4d06226b43f3932fbd8553a6b916::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const':
+/tmp/tmpp9tw1qik/dolfin_expression_05cd4d06226b43f3932fbd8553a6b916.cpp:61:31: error: 'force_point' was not declared in this scope
+   61 |           values[0] = x[0] == force_point[0] && x[1] == force_point[1] && x[2] == force_point[2] ? fx : 0;
+      |                               ^~~~~~~~~~~
+/tmp/tmpp9tw1qik/dolfin_expression_05cd4d06226b43f3932fbd8553a6b916.cpp:61:100: error: 'fx' was not declared in this scope; did you mean 'x'?
+   61 |           values[0] = x[0] == force_point[0] && x[1] == force_point[1] && x[2] == force_point[2] ? fx : 0;
+      |                                                                                                    ^~
+      |                                                                                                    x
+/tmp/tmpp9tw1qik/dolfin_expression_05cd4d06226b43f3932fbd8553a6b916.cpp:62:100: error: 'fy' was not declared in this scope
+   62 |           values[1] = x[0] == force_point[0] && x[1] == force_point[1] && x[2] == force_point[2] ? fy : 0;
+      |                                                                                                    ^~
+/tmp/tmpp9tw1qik/dolfin_expression_05cd4d06226b43f3932fbd8553a6b916.cpp:63:100: error: 'fz' was not declared in this scope
+   63 |           values[2] = x[0] == force_point[0] && x[1] == force_point[1] && x[2] == force_point[2] ? fz : 0;
+      |                                                                                                    ^~

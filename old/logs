@@ -1,0 +1,403 @@
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+
+Time-stepping simulation:
+Time step: 0.01
+  Displacement at force point: [ 0. 10.  0.]
+  Maximum displacement magnitude: 10.00000
+Time step: 0.02
+  Displacement at force point: [ 9.91664319e-03  1.11352874e+01 -2.41946366e-01]
+  Maximum displacement magnitude: 11.13792
+Time step: 0.03
+  Displacement at force point: [-0.0551951  10.32555252 -0.05219114]
+  Maximum displacement magnitude: 10.32583
+Time step: 0.04
+  Displacement at force point: [-8.30386544e-04  1.08345685e+01 -1.49192936e-01]
+  Maximum displacement magnitude: 10.83560
+Time step: 0.05
+  Displacement at force point: [-0.09838392 10.56520094 -0.13563611]
+  Maximum displacement magnitude: 10.56653
+Time step: 0.06
+  Displacement at force point: [-0.02320772 11.00076714 -0.16985571]
+  Maximum displacement magnitude: 11.00210
+Time step: 0.07
+  Displacement at force point: [ 0.06969449 10.72949835 -0.11637331]
+  Maximum displacement magnitude: 10.73036
+Time step: 0.08
+  Displacement at force point: [ 0.20319495 10.84573799 -0.16818181]
+  Maximum displacement magnitude: 10.84894
+Time step: 0.09
+  Displacement at force point: [ 0.17456399 10.3868685  -0.10383392]
+  Maximum displacement magnitude: 10.38885
+Time step: 0.10
+  Displacement at force point: [ 0.12042389 10.47621497 -0.10053472]
+  Maximum displacement magnitude: 10.47739
+Time step: 0.11
+  Displacement at force point: [-0.05300543 10.38061097 -0.11145372]
+  Maximum displacement magnitude: 10.38134
+Time step: 0.12
+  Displacement at force point: [-0.06828296 10.88347492 -0.18055195]
+  Maximum displacement magnitude: 10.88519
+Time step: 0.13
+  Displacement at force point: [ 2.69374104e-03  1.10162778e+01 -1.96986008e-01]
+  Maximum displacement magnitude: 11.01804
+Time step: 0.14
+  Displacement at force point: [ 0.17272622 11.20079293 -0.16489746]
+  Maximum displacement magnitude: 11.20334
+Time step: 0.15
+  Displacement at force point: [ 0.16280165 10.81987823 -0.07350471]
+  Maximum displacement magnitude: 10.82135
+Time step: 0.16
+  Displacement at force point: [ 0.12069101 10.76067629  0.05816841]
+  Maximum displacement magnitude: 10.76151
+Time step: 0.17
+  Displacement at force point: [ 0.06132611 10.68091581  0.15723705]
+  Maximum displacement magnitude: 10.68225
+Time step: 0.18
+  Displacement at force point: [ 0.0635616  11.04592068  0.11998825]
+  Maximum displacement magnitude: 11.04676
+Time step: 0.19
+  Displacement at force point: [-0.18316733 11.1881902  -0.15133777]
+  Maximum displacement magnitude: 11.19071
+Time step: 0.20
+  Displacement at force point: [-0.59778419 11.52833344 -0.56733285]
+  Maximum displacement magnitude: 11.55775
+Time step: 0.21
+  Displacement at force point: [-0.86335243 11.57379179 -0.89627417]
+  Maximum displacement magnitude: 15.81614
+Time step: 0.22
+  Displacement at force point: [-0.35335152 11.51939083 -0.75664475]
+  Maximum displacement magnitude: 21.35386
+Time step: 0.23
+  Displacement at force point: [8.27397577e-01 1.05880688e+01 2.91759922e-03]
+  Maximum displacement magnitude: 18.86195
+Time step: 0.24
+  Displacement at force point: [1.83035993 9.14105507 1.19115044]
+  Maximum displacement magnitude: 20.29934
+Time step: 0.25
+  Displacement at force point: [1.23963491 7.48870403 2.19851793]
+  Maximum displacement magnitude: 19.04399
+Time step: 0.26
+  Displacement at force point: [-1.43797646  7.21783439  2.51579888]
+  Maximum displacement magnitude: 37.18724
+Time step: 0.27
+  Displacement at force point: [-5.1499386   8.96716135  1.96379542]
+  Maximum displacement magnitude: 42.32438
+Time step: 0.28
+  Displacement at force point: [-7.3423693  13.09721419  0.83463727]
+  Maximum displacement magnitude: 47.52680
+Time step: 0.29
+  Displacement at force point: [-5.79592131 18.03061948 -0.57437909]
+  Maximum displacement magnitude: 47.29132
+Time step: 0.30
+  Displacement at force point: [-0.06266819 21.72957104 -2.03815374]
+  Maximum displacement magnitude: 61.50118
+Time step: 0.31
+  Displacement at force point: [ 7.72860743 21.33033026 -3.41531396]
+  Maximum displacement magnitude: 89.46594
+Time step: 0.32
+  Displacement at force point: [13.85551153 16.18936845 -4.30477912]
+  Maximum displacement magnitude: 85.22407
+Time step: 0.33
+  Displacement at force point: [14.34346969  8.26049727 -4.34455872]
+  Maximum displacement magnitude: 79.12853
+Time step: 0.34
+  Displacement at force point: [ 7.23237412  2.21974575 -3.39737152]
+  Maximum displacement magnitude: 64.22791
+Time step: 0.35
+  Displacement at force point: [-5.17961644  0.57570287 -1.48832361]
+  Maximum displacement magnitude: 137.20030
+Time step: 0.36
+  Displacement at force point: [-14.92473651   1.99913575   2.08771574]
+  Maximum displacement magnitude: 190.03786
+Time step: 0.37
+  Displacement at force point: [-11.5981394    2.69033222   8.6186266 ]
+  Maximum displacement magnitude: 196.17071
+Time step: 0.38
+  Displacement at force point: [ 9.17665625  3.21810451 18.04113412]
+  Maximum displacement magnitude: 160.61565
+Time step: 0.39
+  Displacement at force point: [36.42707868  9.44038913 25.73997178]
+  Maximum displacement magnitude: 140.28983
+Time step: 0.40
+  Displacement at force point: [44.54313517 26.77831057 22.29879437]
+  Maximum displacement magnitude: 171.15098
+Time step: 0.41
+  Displacement at force point: [ 9.91247692 49.42855178 -1.09663239]
+  Maximum displacement magnitude: 379.60066
+Time step: 0.42
+  Displacement at force point: [-64.11376503  59.52624332 -42.65388605]
+  Maximum displacement magnitude: 506.86530
+Time step: 0.43
+  Displacement at force point: [-136.44176286   37.63622426  -83.58206597]
+  Maximum displacement magnitude: 451.38799
+Time step: 0.44
+  Displacement at force point: [-149.38940246  -19.86492536  -94.07282388]
+  Maximum displacement magnitude: 567.36830
+Time step: 0.45
+  Displacement at force point: [-74.00377754 -92.95956402 -53.70556228]
+  Maximum displacement magnitude: 755.19234
+Time step: 0.46
+  Displacement at force point: [  57.85010426 -142.05002445   26.90618974]
+  Maximum displacement magnitude: 1327.27783
+Time step: 0.47
+  Displacement at force point: [ 169.84941762 -123.33058021  104.08619308]
+  Maximum displacement magnitude: 1414.93332
+Time step: 0.48
+  Displacement at force point: [200.17101273  -8.57816132 130.09290224]
+  Maximum displacement magnitude: 1040.89602
+Time step: 0.49
+  Displacement at force point: [149.70623147 187.78702364  95.69051741]
+  Maximum displacement magnitude: 1602.41467
+Time step: 0.50
+  Displacement at force point: [ 69.23031003 386.15764499  47.34336981]
+  Maximum displacement magnitude: 2223.23531
+Time step: 0.51
+  Displacement at force point: [ -3.06169299 449.24979746  50.03572729]
+  Maximum displacement magnitude: 3317.63704
+Time step: 0.52
+  Displacement at force point: [-81.42964379 251.40846789 113.82698251]
+  Maximum displacement magnitude: 3365.78779
+Time step: 0.53
+  Displacement at force point: [-196.01315707 -209.22074169  147.64545973]
+  Maximum displacement magnitude: 2566.87086
+Time step: 0.54
+  Displacement at force point: [-316.48651004 -736.68863134    3.70371529]
+  Maximum displacement magnitude: 3381.15254
+Time step: 0.55
+  Displacement at force point: [ -335.52417132 -1002.8762768   -388.22967947]
+  Maximum displacement magnitude: 5652.50489
+Time step: 0.56
+  Displacement at force point: [-156.98235972 -756.8155946  -883.61605873]
+  Maximum displacement magnitude: 9121.12258
+Time step: 0.57
+  Displacement at force point: [  192.39064424   -35.69615912 -1111.53309394]
+  Maximum displacement magnitude: 10180.10278
+Time step: 0.58
+  Displacement at force point: [ 558.16128529  829.08918394 -660.96772126]
+  Maximum displacement magnitude: 7015.03423
+Time step: 0.59
+  Displacement at force point: [ 781.63337569 1463.84866952  599.86965353]
+  Maximum displacement magnitude: 11821.08286
+Time step: 0.60
+  Displacement at force point: [ 815.74259928 1742.76502255 2271.9755634 ]
+  Maximum displacement magnitude: 18673.10923
+Time step: 0.61
+  Displacement at force point: [ 688.00002024 1769.77161551 3460.90869192]
+  Maximum displacement magnitude: 31723.52919
+Time step: 0.62
+  Displacement at force point: [ 348.11428295 1476.60133095 3168.82421856]
+  Maximum displacement magnitude: 34766.40254
+Time step: 0.63
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+Solving linear variational problem.
+  Displacement at force point: [-383.52958704  270.30890848  872.16869624]
+  Maximum displacement magnitude: 28533.94034
+Time step: 0.64
+  Displacement at force point: [-1611.15090244 -2612.76532385 -3032.81615291]
+  Maximum displacement magnitude: 44145.79250
+Time step: 0.65
+  Displacement at force point: [-3033.00848749 -6927.45468524 -7162.4786398 ]
+  Maximum displacement magnitude: 70970.99343
+Time step: 0.66
+  Displacement at force point: [ -3833.82888231 -10334.74875832  -9485.58369352]
+  Maximum displacement magnitude: 105078.25292
+Time step: 0.67
+  Displacement at force point: [-3036.8832558  -8887.28207608 -7969.9499876 ]
+  Maximum displacement magnitude: 92278.08386
+Time step: 0.68
+  Displacement at force point: [ -180.40386682   299.17625139 -1485.56791307]
+  Maximum displacement magnitude: 88067.50077
+Time step: 0.69
+  Displacement at force point: [ 4105.02088957 15570.99318024  9082.10197308]
+  Maximum displacement magnitude: 121624.70755
+Time step: 0.70
+  Displacement at force point: [ 8006.09331209 29374.03479352 19926.13043434]
+  Maximum displacement magnitude: 229685.38002
+Time step: 0.71
+  Displacement at force point: [ 9061.80045584 31245.10210452 24652.98572888]
+  Maximum displacement magnitude: 252905.04940
+Time step: 0.72
+  Displacement at force point: [ 5258.08837801 14421.59175089 16950.78076363]
+  Maximum displacement magnitude: 181256.37565
+Time step: 0.73
+  Displacement at force point: [ -3516.02740887 -17942.55923016  -4646.41621759]
+  Maximum displacement magnitude: 188574.41617
+Time step: 0.74
+  Displacement at force point: [-14148.39081946 -51785.61076397 -32536.47032883]
+  Maximum displacement magnitude: 394583.60033
+Time step: 0.75
+  Displacement at force point: [-20123.24811113 -68382.32338709 -50570.568617  ]
+  Maximum displacement magnitude: 498386.31058
+Time step: 0.76
+  Displacement at force point: [-13670.10307424 -54904.28748901 -41944.32723951]
+  Maximum displacement magnitude: 450974.09114
+Time step: 0.77
+  Displacement at force point: [  9430.64894704 -12738.60051457  -1986.35330489]
+  Maximum displacement magnitude: 368254.65767
+Time step: 0.78
+  Displacement at force point: [43993.69459348 42391.24315055 52345.14198334]
+  Maximum displacement magnitude: 574724.03196
+Time step: 0.79
+  Displacement at force point: [72076.14039986 89214.58737609 85860.02519383]
+  Maximum displacement magnitude: 741058.54061
+Time step: 0.80
+  Displacement at force point: [ 66216.03097876 112454.06069755  64865.96410285]
+  Maximum displacement magnitude: 723708.49320
+Time step: 0.81
+  Displacement at force point: [  1818.07959669 107743.74501915 -15209.37786056]
+  Maximum displacement magnitude: 873288.12556
+Time step: 0.82
+  Displacement at force point: [-122384.82688615   75314.33224913 -112992.1304557 ]
+  Maximum displacement magnitude: 1120033.98552
+Time step: 0.83
+  Displacement at force point: [-262913.35380628    9346.31700973 -153575.21664665]
+  Maximum displacement magnitude: 1611288.04025
+Time step: 0.84
+  Displacement at force point: [-324596.72865243 -100930.41317806  -73767.98332024]
+  Maximum displacement magnitude: 1619610.62528
+Time step: 0.85
+  Displacement at force point: [-189444.42326091 -247853.44000682  120317.6804279 ]
+  Maximum displacement magnitude: 1833706.87352
+Time step: 0.86
+  Displacement at force point: [ 205693.01134462 -372880.56894116  322927.08397467]
+  Maximum displacement magnitude: 2071950.39997
+Time step: 0.87
+  Displacement at force point: [ 764009.93261717 -364054.37300543  362804.5095446 ]
+  Maximum displacement magnitude: 4220444.24269
+Time step: 0.88
+  Displacement at force point: [1169764.40124539 -119251.08296766  107340.6615203 ]
+  Maximum displacement magnitude: 5261609.59328
+Time step: 0.89
+  Displacement at force point: [ 976954.24559221  339487.93312766 -409113.08277121]
+  Maximum displacement magnitude: 3935071.87384
+Time step: 0.90
+  Displacement at force point: [-107671.85421081  788437.17001965 -920831.17700035]
+  Maximum displacement magnitude: 4332293.49906
+Time step: 0.91
+  Displacement at force point: [-1854593.2454028    875884.27038685 -1014634.65905582]
+  Maximum displacement magnitude: 9618085.01205
+Time step: 0.92
+  Displacement at force point: [-3331883.39956853   377897.65992458  -375364.22430429]
+  Maximum displacement magnitude: 12159811.82311
+Time step: 0.93
+  Displacement at force point: [-3213784.39050543  -508369.00527536   914161.17926731]
+  Maximum displacement magnitude: 10345891.17835
+Time step: 0.94
+  Displacement at force point: [ -622293.94669092 -1114666.98405055  2227042.24912702]
+  Maximum displacement magnitude: 12293192.35124
+Time step: 0.95
+  Displacement at force point: [3903450.47395973 -702780.11840663 2597839.94601769]
+  Maximum displacement magnitude: 21269331.40902
+Time step: 0.96
+  Displacement at force point: [8049888.91517752  809901.00754036 1299378.51178936]
+  Maximum displacement magnitude: 29757739.02959
+Time step: 0.97
+  Displacement at force point: [ 8583227.29675844  2336058.97340567 -1482925.74563845]
+  Maximum displacement magnitude: 26139393.70324
+Time step: 0.98
+  Displacement at force point: [ 3310457.86159415  1966091.76181838 -4377275.35180186]
+  Maximum displacement magnitude: 35480651.40112
+Time step: 0.99
+  Displacement at force point: [-6858400.92767214 -1630219.80581401 -5370151.50551054]
+  Maximum displacement magnitude: 41445135.30250
+Time step: 1.00
+  Displacement at force point: [-17202092.08512101  -7458347.76487764  -3100505.71259682]
+  Maximum displacement magnitude: 56038678.94150
+Simulation complete.

@@ -1,0 +1,1 @@
+/home/francois/Documents/University (Real)/Semester 9/Comp 400/RealProject/practice/fenics_tutorial/beam_bunny_chain/4_linear_elasticity_finger_pressure_bunny_static.py
