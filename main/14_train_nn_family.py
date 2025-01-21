@@ -300,7 +300,7 @@ class TrainingContext:
             print("IMPOSSIBLE SCENARIO HAPPENED, EXITING")
             exit(42069)
 
-        print(f"Saving Node: {mode}")
+        print(f"\nSaving Node: {mode}")
         if mode == SaveMode.NowTime:
             print(f"\nNowTime, e: {self.previous_epoch_index}, t:{self.previous_time_index}\n")
             epoch_index = self.previous_epoch_index + 1
