@@ -15,7 +15,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
 
 
-from __TRAINING_FILE import MeshEncoder, SDFCalculator, TrainingContext, LATENT_DIM, DEFAULT_FINGER_INDEX
+from __TRAINING_FILE import MeshEncoder, SDFCalculator, TrainingContext, LATENT_DIM, DEFAULT_FINGER_INDEX, NEURAL_WEIGHTS_DIR
 
 GRID_DIM = 30
 
@@ -24,7 +24,6 @@ GRID_DIM = 30
 LOAD_DIR = "./training_data"
 
 # Directory where we save and load the neural weights
-NEURAL_WEIGHTS_DIR = "./neural_weights"
 FINGER_INDEX = 730
 
 
@@ -263,10 +262,10 @@ def visualize_sdf_points(query_points, sdf_values, threshold=0):
 
 
 def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
-    vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)
-    faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)
-    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)
-    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)
+    vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
+    faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
+    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[:-1]
+    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[:-1]
 
     # Convert inputs to PyTorch tensors
     vertices_tensor = torch.tensor(vertices_tensor_np, dtype=torch.float32)  # (time_steps, num_vertices, 3)
@@ -297,7 +296,6 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
     print(f"sdf_grid = {sdf_grid}\n")
 
     visualize_sdf_points(query_points, sdf_grid)
-    exit(0)
 
     verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
     visualize_mesh(verts, faces)

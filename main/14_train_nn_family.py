@@ -165,7 +165,8 @@ class MeshEncoder(nn.Module):
         super(MeshEncoder, self).__init__()
         self.fc1 = nn.Linear(input_dim, 128)
         self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, latent_dim)
+        self.fc3 = nn.Linear(128, 128)
+        self.fc4 = nn.Linear(128, latent_dim)
 
     def forward(self, vertices):
         """
@@ -177,7 +178,8 @@ class MeshEncoder(nn.Module):
         """
         x = F.relu(self.fc1(vertices))
         x = F.relu(self.fc2(x))
-        latent_vector = self.fc3(x)  # Aggregate over vertices
+        x = F.relu(self.fc3(x))
+        latent_vector = self.fc4(x)  # Aggregate over vertices
         return latent_vector
 
 
