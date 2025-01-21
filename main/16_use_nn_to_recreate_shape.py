@@ -13,11 +13,13 @@ from skimage import measure
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import pyvista as pv
 
 
 from __TRAINING_FILE import MeshEncoder, SDFCalculator, TrainingContext, LATENT_DIM, DEFAULT_FINGER_INDEX, NEURAL_WEIGHTS_DIR
 
-GRID_DIM = 30
+GRID_DIM = 50
 
 
 # Directory containing the pickle files
@@ -197,7 +199,27 @@ def recreate_mesh(sdf_grid, N, b_min, b_max):
     return verts, faces
 
 
-def visualize_mesh(verts, faces):
+def create_sphere(center, radius, resolution=20):
+    """
+    Generate vertices for a sphere.
+
+    Args:
+        center (tuple): Coordinates of the sphere's center (x, y, z).
+        radius (float): Radius of the sphere.
+        resolution (int): Number of points to define the sphere (higher means smoother).
+
+    Returns:
+        tuple: Vertices (x, y, z) of the sphere.
+    """
+    u = np.linspace(0, 2 * np.pi, resolution)
+    v = np.linspace(0, np.pi, resolution)
+    x = center[0] + radius * np.outer(np.cos(u), np.sin(v))
+    y = center[1] + radius * np.outer(np.sin(u), np.sin(v))
+    z = center[2] + radius * np.outer(np.ones_like(u), np.cos(v))
+    return x, y, z
+
+
+def visualize_mesh_old(verts, faces, finger_position, R):
     """
     Visualize the 3D mesh using Matplotlib.
 
@@ -218,6 +240,10 @@ def visualize_mesh(verts, faces):
     ax.set_ylim([verts[:, 1].min(), verts[:, 1].max()])
     ax.set_zlim([verts[:, 2].min(), verts[:, 2].max()])
 
+    # Add a sphere at the finger position
+    x, y, z = create_sphere(finger_position, R)
+    ax.plot_surface(x, y, z, color="r", alpha=0.8)
+
     # Set labels
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
@@ -227,42 +253,60 @@ def visualize_mesh(verts, faces):
     plt.show()
 
 
-def visualize_sdf_points(query_points, sdf_values, threshold=0):
+def convert_faces_to_pyvista_format(faces):
     """
-    Visualize the 3D points with coloring based on the SDF sign.
+    Convert face indices to PyVista-compatible format.
 
     Args:
-        query_points (np.ndarray): 3D points of shape (N, 3).
-        sdf_values (np.ndarray): SDF values of shape (N,).
-        threshold (float): Threshold for separating points into two groups.
-                           Default is 0 for isosurface visualization.
+        faces (np.ndarray): Array of face indices (Nx3 for triangles).
+
+    Returns:
+        np.ndarray: Flattened array with the number of vertices prepended for each face.
     """
-    # Separate points based on SDF value
-    inside_points = query_points[sdf_values < threshold]
-    outside_points = query_points[sdf_values >= threshold]
+    n_faces = faces.shape[0]
+    flat_faces = np.hstack([[3] * n_faces, faces.flatten()])
+    # Validate the length
+    expected_size = n_faces * (3 + 1)
+    if len(flat_faces) != expected_size:
+        raise ValueError(f"Unexpected size of flattened faces array: {len(flat_faces)} != {expected_size}")
+    return flat_faces
 
-    print("inside, outsside")
-    print(len(inside_points), len(outside_points))
-    print("\n")
 
-    # Create 3D scatter plot
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.add_subplot(111, projection="3d")
+def visualize_mesh(verts, faces, finger_position, R):
+    """
+    Visualize the 3D mesh and a sphere at the finger position using PyVista.
 
-    # Plot inside points
-    ax.scatter(inside_points[:, 0], inside_points[:, 1], inside_points[:, 2], c="blue", label=f"SDF < {threshold}", alpha=0.6, s=1)
+    Args:
+        verts (np.ndarray): Vertices of the mesh (Nx3).
+        faces (np.ndarray): Faces of the mesh (Nx3).
+        finger_position (tuple): Coordinates of the sphere's center (x, y, z).
+        R (float): Radius of the sphere.
+    """
+    # Convert faces to PyVista-compatible format
+    pyvista_faces = convert_faces_to_pyvista_format(faces)
 
-    # Plot outside points
-    ax.scatter(outside_points[:, 0], outside_points[:, 1], outside_points[:, 2], c="red", label=f"SDF >= {threshold}", alpha=0.6, s=1)
+    # Create the PyVista mesh
+    mesh = pv.PolyData(verts, pyvista_faces)
 
-    # Add labels and legend
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.legend()
+    # Create the sphere at the finger position
+    sphere = pv.Sphere(radius=R, center=finger_position)
 
-    plt.tight_layout()
-    plt.show()
+    # Initialize PyVista plotter
+    plotter = pv.Plotter()
+
+    # Add the mesh to the plotter
+    plotter.add_mesh(mesh, color="lightblue", show_edges=True, opacity=0.7)
+
+    # Add the sphere to the plotter
+    plotter.add_mesh(sphere, color="red", opacity=0.8)
+
+    # Set plotter properties
+    plotter.set_background("white")
+    plotter.add_axes()
+    plotter.show_grid()
+
+    # Show the plot
+    plotter.show()
 
 
 def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
@@ -289,7 +333,7 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
     time_index_visualise = 0
     # recreate_shape(mesh_encoder, sdf_calculator, time_index_visualise, vertices_tensor, sdf_points)
 
-    b_min, b_max = compute_small_bounding_box(vertices_tensor_np[time_index_visualise])
+    b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[time_index_visualise])
     print("\n")
     print(f"b_min = {b_min}\nb_max = {b_max}")
 
@@ -299,10 +343,23 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
     print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
     print(f"sdf_grid = {sdf_grid}\n")
 
-    visualize_sdf_points(query_points, sdf_grid)
+    # visualize_sdf_points(query_points, sdf_grid)
+
+    # File containing finger_positions (after filtering)
+    FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
+    finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
+    # Swap Y and Z because poylscope uses weird data
+    # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
+    finger_position = finger_positions[finger_index]
+    R = 0.003  # Radius of the FINGER
 
     verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
-    visualize_mesh(verts, faces)
+
+    print(f"np.shape(verts) = {np.shape(verts)}")
+    print(f"np.shape(faces) = {np.shape(faces)}")
+    print(f"faces = {faces}")
+    print(f"verts = {verts}")
+    visualize_mesh(verts, faces, finger_position, R)
 
     return 0
 

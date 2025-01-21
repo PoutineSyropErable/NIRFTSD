@@ -18,12 +18,12 @@ LOAD_DIR = "./training_data"
 
 # Directory where we save and load the neural weights
 NEURAL_WEIGHTS_DIR = "./neural_weights"
-LATENT_DIM = 64
-SCHEDULER_SWITCH_EPOCH = 4
+LATENT_DIM = 128
+SCHEDULER_SWITCH_EPOCH = 3
 DEFAULT_FINGER_INDEX = 730
 
-TIME_PATIENCE = 60
-EPOCH_PATIENCE = 3
+TIME_PATIENCE = 35
+EPOCH_PATIENCE = 4
 
 
 # Global values for signals
@@ -167,9 +167,9 @@ class MeshEncoder(nn.Module):
 
     def __init__(self, input_dim: int = 9001, latent_dim: int = 64):
         super(MeshEncoder, self).__init__()
-        self.fc1 = nn.Linear(input_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 128)
+        self.fc1 = nn.Linear(input_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, latent_dim)
 
     def forward(self, vertices):
@@ -197,9 +197,9 @@ class SDFCalculator(nn.Module):
 
     def __init__(self, latent_dim: int = 256, input_dim: int = 3):
         super(SDFCalculator, self).__init__()
-        self.fc1 = nn.Linear(latent_dim + input_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 128)
+        self.fc1 = nn.Linear(latent_dim + input_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, 1)
 
     def forward(self, latent_vector, coordinates):
@@ -261,7 +261,7 @@ class TrainingContext:
             list(self.mesh_encoder.parameters()) + list(self.sdf_calculator.parameters()),
             lr=learning_rate,
         )
-        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.8, patience=TIME_PATIENCE)
+        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.92, patience=TIME_PATIENCE)
         # verbose is deprecated and gone
 
         self.loss_tracker: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
@@ -475,8 +475,11 @@ def train_model(
 
     min_training_loss, min_validate_loss = get_previous_min(training_context, start_epoch)
 
+    print(f"\nPrevious mins: {min_training_loss}, {min_validate_loss}\n")
+
     validate_loss_not_increase_counter = 0
     validate_loss_not_increase_save = 30
+    previous_best = 90001  # we should never see this value, but if we do, it wont crash
 
     print("\n-------Start of Training----------\n")
     # Training loop
@@ -484,17 +487,6 @@ def train_model(
         print(f"\nstart of epoch {epoch}")
         total_loss: float = 0
         total_validation_loss: float = 0
-
-        if epoch == SCHEDULER_SWITCH_EPOCH:
-            print(f"reached epoch {SCHEDULER_SWITCH_EPOCH}, changing the scheduler to epoch wise")
-            training_context.scheduler = ReduceLROnPlateau(
-                training_context.optimizer,
-                mode="min",
-                factor=0.92,
-                patience=EPOCH_PATIENCE,
-            )  # verbose is gone
-            min_validate_loss = total_loss / vertices_tensor.shape[0]
-            min_training_loss = total_validation_loss / vertices_tensor.shape[0]
 
         all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
         if epoch < SCHEDULER_SWITCH_EPOCH:
@@ -532,20 +524,20 @@ def train_model(
 
             if epoch < SCHEDULER_SWITCH_EPOCH:
                 # ----- Validation upgrade check
-                if loss_validate <= min_validate_loss:
-                    validation_not_upgrade = False
+                if loss_validate > min_validate_loss:
                     validate_loss_not_increase_counter += 1
-                    min_validate_loss = loss_validate
-                else:
-                    validate_loss_not_increase_counter = 0
                     validation_not_upgrade = True
+                else:
+                    validation_not_upgrade = False
+                    validate_loss_not_increase_counter = 0
+                    min_validate_loss = loss_validate
 
                 # ----- Training upgrade check
-                if loss_training <= min_training_loss:
+                if loss_training > min_training_loss:
+                    training_not_upgrade = True
+                else:
                     training_not_upgrade = False
                     min_training_loss = loss_training
-                else:
-                    training_not_upgrade = True
 
                 # Training/Validate upgrade string and messages. (tusm)
                 tusm = "Training No Upgrade"
@@ -564,16 +556,18 @@ def train_model(
 
             total_loss += loss_training
             total_validation_loss += loss_validate
-            if epoch < SCHEDULER_SWITCH_EPOCH:
-                training_context.scheduler.step(loss_training)
+
             # Custom logging for the learning rate
             current_lr = training_context.scheduler.get_last_lr()
 
             ps1 = f"\t{i: 03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
             ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
-            ps3 = f"[{current_lr[0]:.9e}] {tus} {vus}"
+            ps3 = f"[{current_lr[0]:.9e}] "
+            ps4 = f"{tus} {vus}" if epoch < SCHEDULER_SWITCH_EPOCH else ""
 
-            print(ps1 + ps2 + ps3)
+            print(ps1 + ps2 + ps3 + ps4)
+            if epoch < SCHEDULER_SWITCH_EPOCH:
+                training_context.scheduler.step(loss_training)
 
             loss.backward()
             training_context.optimizer.step()
@@ -598,20 +592,32 @@ def train_model(
         avg_vl = total_validation_loss / vertices_tensor.shape[0]
 
         training_distance, validation_distance = np.sqrt(avg_tl), np.sqrt(avg_vl)
+        if epoch == SCHEDULER_SWITCH_EPOCH:
+            """It will still do optimisation on every data from the batch. That's just for the scheduler"""
+            print(f"reached epoch {SCHEDULER_SWITCH_EPOCH}, changing the scheduler to epoch wise")
+            training_context.scheduler = ReduceLROnPlateau(
+                training_context.optimizer,
+                mode="min",
+                factor=0.8,
+                patience=EPOCH_PATIENCE,
+            )  # verbose is gone
+            min_validate_loss = avg_vl
+            min_training_loss = avg_tl
+
         if epoch >= SCHEDULER_SWITCH_EPOCH:
-            training_context.scheduler.step(avg_tl)
             # ----- Validation upgrade check
             if avg_vl <= min_validate_loss:
                 validation_not_upgrade = False
-                validate_loss_not_increase_counter += 1
                 min_validate_loss = avg_vl
-            else:
                 validate_loss_not_increase_counter = 0
+            else:
+                validate_loss_not_increase_counter += 1
                 validation_not_upgrade = True
 
             # ----- Training upgrade check
             if avg_tl <= min_training_loss:
                 training_not_upgrade = False
+                previous_best = min_training_loss
                 min_training_loss = avg_tl
             else:
                 training_not_upgrade = True
@@ -624,12 +630,16 @@ def train_model(
             vus = " | Validation No Upgrade" if validation_not_upgrade else ""
 
             # Step the scheduler
-            print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_tl } {tus} {vus}")
+            print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_vl } {tus} {vus}")
             ps1 = f" Training distance: {training_distance}, "
             ps2 = f"Validation Distance: {validation_distance}, Distance Scale: {dL2}, "
             ps3 = f"Val Ratio: {validation_distance/dL2}"
             print(ps1 + ps2 + ps3)
 
+            if training_not_upgrade:
+                print(f"the previous best avg_training loss was: {previous_best}\n")
+
+            training_context.scheduler.step(avg_tl)
             if validate_loss_not_increase_counter >= validate_loss_not_increase_save:
                 validate_loss_not_increase_counter = 0
                 training_context.save_model_weights(SaveMode.NowEpoch)
@@ -639,7 +649,7 @@ def train_model(
                     file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
         else:
-            print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_tl }")
+            print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_vl }")
             ps1 = f" Training distance: {training_distance}, "
             ps2 = f"Validation Distance: {validation_distance}, Distance Scale: {dL2}, "
             ps3 = f"Val Ratio: {validation_distance/dL2}"
@@ -676,11 +686,14 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     # Ensure the weights directory exists
     os.makedirs(NEURAL_WEIGHTS_DIR, exist_ok=True)
 
-    vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
-    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[:-1]
-    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[:-1]
-    sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)[:-1]
-    sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)[:-1]
+    end = 101
+    # We don't use the last data, and this also lets us cut the data for tests
+
+    vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[0:end]
+    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[0:end]
+    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[0:end]
+    sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)[0:end]
+    sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)[0:end]
     print("\n")
 
     b_min, b_max = compute_small_bounding_box(vertices_tensor[0])
