@@ -475,7 +475,7 @@ def train_model(
     print("\n-------Start of Training----------\n")
     # Training loop
     for epoch in range(start_epoch, epochs):
-        print(f"start of epoch {epoch}")
+        print(f"\nstart of epoch {epoch}")
         total_loss: float = 0
         total_validation_loss: float = 0
 
