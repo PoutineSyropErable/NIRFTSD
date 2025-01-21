@@ -551,7 +551,7 @@ def train_model(
                     validate_loss_not_increase_counter = 0
                     training_context.save_model_weights(SaveMode.NowEpoch)
                     # Write append to a file called validation_tacker.txt epoch and i -1
-                    print(f"\t\t\t\tSaving previou Epoch to File")
+                    print(f"\t\tSaving previou Epoch to File")
                     with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
                         file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
@@ -627,7 +627,7 @@ def train_model(
                 validate_loss_not_increase_counter = 0
                 training_context.save_model_weights(SaveMode.NowEpoch)
                 # Write append to a file called validation_tacker.txt epoch and i -1
-                print(f"\t\t\t\tSaving previou Epoch to File")
+                print(f"\t\tSaving previou Epoch to File")
                 with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
                     file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
