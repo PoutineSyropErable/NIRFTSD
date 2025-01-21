@@ -22,6 +22,10 @@ LATENT_DIM = 64
 SCHEDULER_SWITCH_EPOCH = 4
 DEFAULT_FINGER_INDEX = 730
 
+TIME_PATIENCE = 60
+EPOCH_PATIENCE = 3
+
+
 # Global values for signals
 stop_time_signal = False
 stop_epoch_signal = False
@@ -257,7 +261,7 @@ class TrainingContext:
             list(self.mesh_encoder.parameters()) + list(self.sdf_calculator.parameters()),
             lr=learning_rate,
         )
-        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.8, patience=30)
+        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.8, patience=TIME_PATIENCE)
         # verbose is deprecated and gone
 
         self.loss_tracker: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
@@ -486,8 +490,8 @@ def train_model(
             training_context.scheduler = ReduceLROnPlateau(
                 training_context.optimizer,
                 mode="min",
-                factor=0.8,
-                patience=3,
+                factor=0.92,
+                patience=EPOCH_PATIENCE,
             )  # verbose is gone
             min_validate_loss = total_loss / vertices_tensor.shape[0]
             min_training_loss = total_validation_loss / vertices_tensor.shape[0]
@@ -495,6 +499,7 @@ def train_model(
         all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
         if epoch < SCHEDULER_SWITCH_EPOCH:
             all_ts_shuffled = all_ts
+            # all_ts_shuffled = np.random.permutation(all_ts)
         else:
             all_ts_shuffled = np.random.permutation(all_ts)
 
@@ -594,7 +599,7 @@ def train_model(
 
         training_distance, validation_distance = np.sqrt(avg_tl), np.sqrt(avg_vl)
         if epoch >= SCHEDULER_SWITCH_EPOCH:
-            training_context.scheduler.step(total_loss / vertices_tensor.shape[0])
+            training_context.scheduler.step(avg_tl)
             # ----- Validation upgrade check
             if avg_vl <= min_validate_loss:
                 validation_not_upgrade = False

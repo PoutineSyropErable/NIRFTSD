@@ -13,7 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import polyscope as ps
 
-DEBUG_ = True
+DEBUG_ = False
 DEBUG_TIMER = False
 os.chdir(sys.path[0])
 

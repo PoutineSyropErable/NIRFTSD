@@ -113,7 +113,7 @@ def recreate_shape(mesh_encoder, sdf_calculator, time_index_visualise, vertices_
     print(f"Values:\n{predicted_sdf_np}")
 
 
-def calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_index, query_points_np) -> np.ndarray:
+def calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_index_visualise, query_points_np) -> np.ndarray:
     """
     Calculate the SDF values at given query points using the trained models.
 
@@ -131,7 +131,7 @@ def calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_
     query_points = torch.tensor(query_points_np, dtype=torch.float32).unsqueeze(0)  # Shape (1, N, 3)
 
     # Extract the latent vector from the mesh encoder
-    vertices = vertices_tensor[time_index].view(1, -1)  # Flatten the vertices
+    vertices = vertices_tensor[time_index_visualise].view(1, -1)  # Flatten the vertices
     latent_vector = mesh_encoder(vertices)  # Shape (1, latent_dim)
 
     # Use the SDF calculator to predict the SDF values
@@ -240,6 +240,10 @@ def visualize_sdf_points(query_points, sdf_values, threshold=0):
     # Separate points based on SDF value
     inside_points = query_points[sdf_values < threshold]
     outside_points = query_points[sdf_values >= threshold]
+
+    print("inside, outsside")
+    print(len(inside_points), len(outside_points))
+    print("\n")
 
     # Create 3D scatter plot
     fig = plt.figure(figsize=(10, 10))

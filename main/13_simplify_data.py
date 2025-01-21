@@ -492,13 +492,6 @@ def main(DISPLACEMENT_FILE, SDF_FILE, SDF_FILE_VALIDATE, index):
     print("shape(faces) =", np.shape(faces))
     print("\n")
 
-    TIME_INDEX = 80
-    show_mesh(*shape(TIME_INDEX))
-    animate_deformation(faces, vertices_tensor)
-    visualize_mesh_with_points(
-        vertices_tensor[TIME_INDEX], faces, sdf_points[TIME_INDEX], sdf_values[TIME_INDEX], NUMBER_OF_POINTS_IN_VISUALISATION
-    )
-
     # Ensure the directory exists
     TRAINING_DIR = "./training_data"
     os.makedirs(TRAINING_DIR, exist_ok=True)
