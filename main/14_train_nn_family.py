@@ -490,7 +490,7 @@ def train_model(
             min_validate_loss = total_loss / vertices_tensor.shape[0]
             min_training_loss = total_validation_loss / vertices_tensor.shape[0]
 
-            all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
+        all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
         if epoch < SCHEDULER_SWITCH_EPOCH:
             all_ts_shuffled = all_ts
         else:
