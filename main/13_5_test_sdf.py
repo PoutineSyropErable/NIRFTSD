@@ -16,7 +16,7 @@ def read_pickle(directory, filename, finger_index, validate=False):
     return output
 
 
-def plot_chosen_sdf_points(chosen_sdf_points, time_index, condition):
+def plot_chosen_sdf_points(chosen_sdf_points, values, condition, time_index):
     """
     Plot points with sdf < 0 for a given time index and show a histogram of SDF values.
 
@@ -66,7 +66,7 @@ def main(load_dir, finger_index, time_index):
     print(f"Number of negative SDF points: {negative_sdf_points.shape[0]}")
     print(f"Number of positive SDF points: {positive_sdf_points.shape[0]}")
 
-    plot_chosen_sdf_points(negative_sdf_points, time_index, "sdf < 0 ")
+    plot_chosen_sdf_points(negative_sdf_points, values, "sdf < 0", time_index)
 
 
 if __name__ == "__main__":
