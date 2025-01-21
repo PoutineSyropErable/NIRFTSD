@@ -19,7 +19,7 @@ LOAD_DIR = "./training_data"
 # Directory where we save and load the neural weights
 NEURAL_WEIGHTS_DIR = "./neural_weights"
 LATENT_DIM = 64
-SCHEDULER_SWITCH_EPOCH = 1001
+SCHEDULER_SWITCH_EPOCH = 4
 DEFAULT_FINGER_INDEX = 730
 
 # Global values for signals
@@ -255,7 +255,8 @@ class TrainingContext:
             list(self.mesh_encoder.parameters()) + list(self.sdf_calculator.parameters()),
             lr=learning_rate,
         )
-        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.8, patience=20, verbose=True)
+        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.8, patience=30)
+        # verbose is deprecated and gone
 
         self.loss_tracker: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
         self.loss_tracker_validate: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
@@ -485,14 +486,17 @@ def train_model(
                 mode="min",
                 factor=0.8,
                 patience=3,
-                verbose=True,
-            )
+            )  # verbose is gone
             min_validate_loss = total_loss / vertices_tensor.shape[0]
             min_training_loss = total_validation_loss / vertices_tensor.shape[0]
 
-        all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
-        all_ts_shuffled = np.random.permutation(all_ts)
-        for t_index in all_ts_shuffled:
+            all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
+        if epoch < SCHEDULER_SWITCH_EPOCH:
+            all_ts_shuffled = all_ts
+        else:
+            all_ts_shuffled = np.random.permutation(all_ts)
+
+        for i, t_index in enumerate(all_ts_shuffled):
             training_context.optimizer.zero_grad()
 
             # ------------ Get data for the current time step
@@ -546,10 +550,10 @@ def train_model(
                 if validate_loss_not_increase_counter >= validate_loss_not_increase_save:
                     validate_loss_not_increase_counter = 0
                     training_context.save_model_weights(SaveMode.NowEpoch)
-                    # Write append to a file called validation_tacker.txt epoch and t_index -1
+                    # Write append to a file called validation_tacker.txt epoch and i -1
                     print(f"\t\t\t\tSaving previou Epoch to File")
                     with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
-                        file.write(f"Epoch: {epoch}, Time Index: {t_index - 1}\n")
+                        file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
             total_loss += loss_training
             total_validation_loss += loss_validate
@@ -558,7 +562,7 @@ def train_model(
             # Custom logging for the learning rate
             current_lr = training_context.scheduler.get_last_lr()
 
-            ps1 = f"\t\tTime Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
+            ps1 = f"\t{i: 03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
             ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
             ps3 = f"[{current_lr[0]:.9e}] {tus} {vus}"
 
@@ -567,15 +571,15 @@ def train_model(
             loss.backward()
             training_context.optimizer.step()
 
-            training_context.loss_tracker[epoch][t_index] = loss_training
-            training_context.loss_tracker_validate[epoch][t_index] = loss_validate
+            training_context.loss_tracker[epoch][i] = loss_training
+            training_context.loss_tracker_validate[epoch][i] = loss_validate
 
             # Store weights in the previous time step (We assume from this part on, the for loop has ended and the rest is atomic and "hidden", like the t_index++ part)
             training_context.time_update(t_index)
 
             # Handle stop time signal
             if stop_time_signal:
-                print(f"Stopping after time iteration {t_index + 1}/{vertices_tensor.shape[0]}.")
+                print(f"Stopping after time iteration {i + 1}/{vertices_tensor.shape[0]}.")
                 training_context.save_model_weights(SaveMode.NextTimeItteration)
                 return 4  # return with code 4
 
@@ -616,22 +620,22 @@ def train_model(
             print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_tl } {tus} {vus}")
             ps1 = f" Training distance: {training_distance}, "
             ps2 = f"Validation Distance: {validation_distance}, Distance Scale: {dL2}, "
-            ps3 = f"Ratio: {validation_distance/dL2}"
+            ps3 = f"Val Ratio: {validation_distance/dL2}"
             print(ps1 + ps2 + ps3)
 
             if validate_loss_not_increase_counter >= validate_loss_not_increase_save:
                 validate_loss_not_increase_counter = 0
                 training_context.save_model_weights(SaveMode.NowEpoch)
-                # Write append to a file called validation_tacker.txt epoch and t_index -1
+                # Write append to a file called validation_tacker.txt epoch and i -1
                 print(f"\t\t\t\tSaving previou Epoch to File")
                 with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
-                    file.write(f"Epoch: {epoch}, Time Index: {t_index - 1}\n")
+                    file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
         else:
             print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_tl }")
             ps1 = f" Training distance: {training_distance}, "
             ps2 = f"Validation Distance: {validation_distance}, Distance Scale: {dL2}, "
-            ps3 = f"Ratio: {validation_distance/dL2}"
+            ps3 = f"Val Ratio: {validation_distance/dL2}"
             print(ps1 + ps2 + ps3)
 
         training_context.epoch_update(epoch)
@@ -665,11 +669,11 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     # Ensure the weights directory exists
     os.makedirs(NEURAL_WEIGHTS_DIR, exist_ok=True)
 
-    vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)
-    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)
-    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)
-    sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)
-    sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)
+    vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
+    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[:-1]
+    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[:-1]
+    sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)[:-1]
+    sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)[:-1]
     print("\n")
 
     b_min, b_max = compute_small_bounding_box(vertices_tensor[0])
