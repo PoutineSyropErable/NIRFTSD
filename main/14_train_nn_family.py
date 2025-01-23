@@ -601,7 +601,7 @@ def train_model(
             training_context.scheduler = ReduceLROnPlateau(
                 training_context.optimizer,
                 mode="min",
-                factor=0.8,
+                factor=0.75,
                 patience=EPOCH_PATIENCE,
             )  # verbose is gone
             min_validate_loss = avg_vl

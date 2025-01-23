@@ -293,7 +293,7 @@ class PhysicalDeformationSimulation:
                 print(f"Warning: write_index ({self.write_index}) exceeds NUMBER_OF_WRITES ({self.NUMBER_OF_WRITES})!")
                 return 2
 
-            if step == self.num_steps - 1 or (step % self.NUMBER_OF_STEPS_BETWEEN_WRITES) == 0:
+            if (step % self.NUMBER_OF_STEPS_BETWEEN_WRITES) == 0:
                 print("-----------------------------------------------")
                 print(f"Time step {step+1}/{self.num_steps}, t = {self.t}")
 

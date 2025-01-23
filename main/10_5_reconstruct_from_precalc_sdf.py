@@ -401,15 +401,39 @@ def visualize_mesh_list(mesh_list, finger_position, R, output_file="mesh_animati
         print(f"  Focal Point: {focal_point}")
         print(f"  View Up: {view_up}")
         print()
-        key = input("Press something to continue to next frame").strip().lower()
+        # key = input("Press something to continue to next frame").strip().lower()
 
     # Close the plotter and save the movie
     plotter.close()
     print(f"Animation saved to {output_file}")
 
 
+def do_all(sdf_points, sdf_values, vertices_tensor, finger_index):
+    nn_models, sdf_values_list = get_trained_models(sdf_points, sdf_values)
+    print("created models")
+
+    # Get SDF value at grid points for all time_index.
+    b_min, b_max = find_global_bounding_box(vertices_tensor)
+    query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
+    print("got query points")
+    # Get or recreate meshes
+    verts_list, faces_list = get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, GRID_DIM)
+
+    # Get or generate the mesh list
+    mesh_list = get_mesh_list(verts_list, faces_list)
+
+    # File containing finger_positions (after filtering)
+    FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
+    finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
+    # Swap Y and Z because poylscope uses weird data
+    # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
+    finger_position = finger_positions[finger_index]
+
+    visualize_mesh_list(mesh_list, finger_position, R)
+
+
 def main(finger_index):
-    end = 100
+    end = 101
     vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[0:end]
     sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[0:end]
     sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[0:end]
