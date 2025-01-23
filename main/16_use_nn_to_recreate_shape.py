@@ -19,7 +19,7 @@ import pyvista as pv
 
 from __TRAINING_FILE import MeshEncoder, SDFCalculator, TrainingContext, LATENT_DIM, DEFAULT_FINGER_INDEX, NEURAL_WEIGHTS_DIR
 
-GRID_DIM = 50
+GRID_DIM = 100
 
 
 # Directory containing the pickle files
@@ -27,6 +27,19 @@ LOAD_DIR = "./training_data"
 
 # Directory where we save and load the neural weights
 FINGER_INDEX = 730
+
+
+def save_pickle(path: str, object1):
+    with open(path, "wb") as f:
+        pickle.dump(object1, f)
+
+
+def load_pickle(path: str):
+    with open(path, "rb") as file:
+        output = pickle.load(file)
+        print(f"Loaded {type(output)} from {path}")
+
+    return output
 
 
 def read_pickle(directory, filename, finger_index, validate=False):
@@ -82,40 +95,7 @@ def load_model_weights(encoder, calculator, epoch_index, time_index):
         raise FileNotFoundError(f"Calculator weights not found at {calculator_weights_path}.")
 
 
-def recreate_shape(mesh_encoder, sdf_calculator, time_index_visualise, vertices_tensor, sdf_points):
-    """
-    Recreate the shape by extracting the latent vector and using the SDF calculator.
-
-    Args:
-        mesh_encoder (MeshEncoder): Trained mesh encoder model.
-        sdf_calculator (SDFCalculator): Trained SDF calculator model.
-        vertices_tensor (torch.Tensor): Vertices tensor.
-        faces (any): Faces information.
-        time_index_visualise (int): Time index to visualize.
-        sdf_points (torch.Tensor): Points for SDF computation.
-    """
-    # Extract the latent vector
-    vertices = vertices_tensor[time_index_visualise].view(1, -1)  # Flatten the vertices
-    latent_vector = mesh_encoder(vertices)
-
-    # Convert latent vector to NumPy and print
-    latent_vector_np = latent_vector.detach().cpu().numpy().flatten()
-    print(f"Latent vector for time index {time_index_visualise}:")
-    print(f"Shape: {latent_vector_np.shape}")
-    print(f"Values:\n{latent_vector_np}")
-
-    # Predict SDF values
-    points = sdf_points[time_index_visualise].unsqueeze(0)
-    predicted_sdf = sdf_calculator(latent_vector, points)  # (1, num_points, 1)
-
-    # Convert predicted SDF values to NumPy and print
-    predicted_sdf_np = predicted_sdf.detach().cpu().numpy().flatten()
-    print("\nPredicted SDF values:")
-    print(f"Shape: {predicted_sdf_np.shape}")
-    print(f"Values:\n{predicted_sdf_np}")
-
-
-def calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_index_visualise, query_points_np) -> np.ndarray:
+def calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, I, query_points_np) -> np.ndarray:
     """
     Calculate the SDF values at given query points using the trained models.
 
@@ -133,7 +113,7 @@ def calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_
     query_points = torch.tensor(query_points_np, dtype=torch.float32).unsqueeze(0)  # Shape (1, N, 3)
 
     # Extract the latent vector from the mesh encoder
-    vertices = vertices_tensor[time_index_visualise].view(1, -1)  # Flatten the vertices
+    vertices = vertices_tensor[I].view(1, -1)  # Flatten the vertices
     latent_vector = mesh_encoder(vertices)  # Shape (1, latent_dim)
 
     # Use the SDF calculator to predict the SDF values
@@ -235,11 +215,21 @@ def visualize_mesh_old(verts, faces, finger_position, R):
     mesh.set_edgecolor("k")
     ax.add_collection3d(mesh)
 
-    # Set plot limits
-    ax.set_xlim([verts[:, 0].min(), verts[:, 0].max()])
-    ax.set_ylim([verts[:, 1].min(), verts[:, 1].max()])
-    ax.set_zlim([verts[:, 2].min(), verts[:, 2].max()])
+    # Determine the cubic bounds
+    x_min, x_max = verts[:, 0].min(), verts[:, 0].max()
+    y_min, y_max = verts[:, 1].min(), verts[:, 1].max()
+    z_min, z_max = verts[:, 2].min(), verts[:, 2].max()
 
+    # Find the range and center
+    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
+    center_x = (x_max + x_min) / 2.0
+    center_y = (y_max + y_min) / 2.0
+    center_z = (z_max + z_min) / 2.0
+
+    # Set cubic limits
+    ax.set_xlim(center_x - max_range, center_x + max_range)
+    ax.set_ylim(center_y - max_range, center_y + max_range)
+    ax.set_zlim(center_z - max_range, center_z + max_range)
     # Add a sphere at the finger position
     x, y, z = create_sphere(finger_position, R)
     ax.plot_surface(x, y, z, color="r", alpha=0.8)
@@ -283,7 +273,7 @@ def visualize_mesh(verts, faces, finger_position, R):
         R (float): Radius of the sphere.
     """
     # Convert faces to PyVista-compatible format
-    pyvista_faces = convert_faces_to_pyvista_format(faces)
+    pyvista_faces = np.hstack([np.full((faces.shape[0], 1), 3), faces]).flatten()
 
     # Create the PyVista mesh
     mesh = pv.PolyData(verts, pyvista_faces)
@@ -309,7 +299,52 @@ def visualize_mesh(verts, faces, finger_position, R):
     plotter.show()
 
 
-def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
+def visualize_mesh_list(mesh_list, finger_position, R, output_file="mesh_animation.mp4", offscreen=False):
+    """
+    Animate the 3D meshes as an animation and a sphere at the finger position using PyVista.
+
+    Args:
+        mesh_list (list of pv.PolyData): List of PyVista meshes.
+        finger_position (tuple): Coordinates of the sphere's center (x, y, z).
+        R (float): Radius of the sphere.
+        output_file (str): Path to save the animation (MP4 format).
+        offscreen (bool): Whether to enable offscreen rendering.
+    """
+    # Initialize PyVista plotter
+    plotter = pv.Plotter(off_screen=offscreen)
+    plotter.add_axes()
+    plotter.show_grid()
+
+    # Add a title
+    # plotter.add_text("Mesh Animation", font_size=12)
+
+    # Add the static sphere at the finger position
+    finger_marker = pv.Sphere(radius=R, center=finger_position)
+    plotter.add_mesh(finger_marker, color="red", label="Finger Position", opacity=0.8)
+
+    # Add the first mesh to initialize
+    actor = plotter.add_mesh(mesh_list[0], color="lightblue", show_edges=True)
+
+    # Open the movie file for writing
+    plotter.open_movie(output_file, framerate=20)
+
+    # Animate through all meshes in the list
+    for i, mesh in enumerate(mesh_list):
+        # Update the actor with the current mesh's geometry
+        actor.GetMapper().SetInputData(mesh)
+
+        # Optional: Add a progress label
+        plotter.add_text(f"Frame: {i + 1}/{len(mesh_list)}", name="frame-label", font_size=10)
+
+        # Write the current frame to the movie
+        plotter.write_frame()
+
+    # Close the plotter and save the movie
+    plotter.close()
+    print(f"Animation saved to {output_file}")
+
+
+def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visualize_index=0):
     vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[:-1]
@@ -330,36 +365,125 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
     mesh_encoder = training_context.mesh_encoder
     sdf_calculator = training_context.sdf_calculator
 
-    time_index_visualise = 0
-    # recreate_shape(mesh_encoder, sdf_calculator, time_index_visualise, vertices_tensor, sdf_points)
+    latent_vector_list = []
+    for I in range(len(vertices_tensor) - 1):
+        # Extract the latent vector from the mesh encoder
+        vertices = vertices_tensor[I].view(1, -1)  # Flatten the vertices
+        latent_vector = mesh_encoder(vertices)  # Shape (1, latent_dim)
+        latent_vector_np = latent_vector.detach().cpu().numpy().flatten()
+        latent_vector_list.append(latent_vector_np)
+        # print(f"Latent vector at index {I}: {latent_vector_np}")
 
-    b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[time_index_visualise])
-    print("\n")
-    print(f"b_min = {b_min}\nb_max = {b_max}")
+    # Calculate the standard deviation of each latent dimension across time
 
-    query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
-    sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_index_visualise, query_points)
-    print("")
-    print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
-    print(f"sdf_grid = {sdf_grid}\n")
+    print("\n\n")
+    latent_vectors = np.array(latent_vector_list).T
+    print(np.shape(latent_vectors))
+    print(latent_vectors)
 
-    # visualize_sdf_points(query_points, sdf_grid)
+    print("\n\n")
+    stdl = []
+    for latent_vector_coord in latent_vectors:
+        stdl.append(np.std(latent_vector_coord))
 
-    # File containing finger_positions (after filtering)
-    FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
-    finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
-    # Swap Y and Z because poylscope uses weird data
-    # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
-    finger_position = finger_positions[finger_index]
-    R = 0.003  # Radius of the FINGER
+    stdl = np.array(stdl)
+    print("each element standard deviation=\n")
+    print(stdl)
 
-    verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
+    # Add plot title and labels
+    plt.title("First 5 Latent Vectors", fontsize=16)
+    plt.xlabel("Latent Dimension Index", fontsize=12)
+    plt.ylabel("Latent Value", fontsize=12)
 
-    print(f"np.shape(verts) = {np.shape(verts)}")
-    print(f"np.shape(faces) = {np.shape(faces)}")
-    print(f"faces = {faces}")
-    print(f"verts = {verts}")
-    visualize_mesh(verts, faces, finger_position, R)
+    # Add legend and grid
+    plt.legend(loc="upper right")
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+    if True:
+        b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[visualize_index])
+        print("\n")
+        print(f"b_min = {b_min}\nb_max = {b_max}")
+
+        # File containing finger_positions (after filtering)
+        FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
+        finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
+        # Swap Y and Z because poylscope uses weird data
+        # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
+        finger_position = finger_positions[finger_index]
+        R = 0.003  # Radius of the FINGER
+
+        query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
+        sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, visualize_index, query_points)
+        print("")
+        print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
+        print(f"sdf_grid = {sdf_grid}\n")
+
+        # visualize_sdf_points(query_points, sdf_grid)
+
+        verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
+
+        print(f"np.shape(verts) = {np.shape(verts)}")
+        print(f"np.shape(faces) = {np.shape(faces)}")
+        print(f"faces = {faces}")
+        print(f"verts = {verts}")
+        # visualize_mesh(verts, faces, finger_position, R)
+
+    verts_list_path = "verts_list.pkl"
+    faces_list_path = "faces_list.pkl"
+    n = 100
+    if os.path.exists(verts_list_path) and os.path.exists(faces_list_path):
+        # Load pre-processed mesh data
+        verts_list = load_pickle(verts_list_path)
+        faces_list = load_pickle(faces_list_path)
+        I = 0
+        for verts, faces in zip(verts_list, faces_list):
+            # print(f"np.shape(verts) = {np.shape(verts)}")
+            # print(f"np.shape(faces) = {np.shape(faces)}")
+            print(f"a = {vertices_tensor[I][0][0]}")
+            I += 1
+            pass
+    else:
+        verts_list = []
+        faces_list = []
+        for I in range(n):
+            # Compute bounding box for the current shape
+            b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[visualize_index])
+            # print("\n")
+            # print(f"Shape {visualize_index + 1}")
+            # print(f"b_min = {b_min}\nb_max = {b_max}")
+
+            query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
+            sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, I, query_points)
+            # print("")
+            # print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
+            # print(f"sdf_grid = {sdf_grid}\n")
+
+            # Recreate the mesh for the current shape
+            verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
+
+            # print(f"np.shape(verts) = {np.shape(verts)}")
+            # print(f"np.shape(faces) = {np.shape(faces)}")
+            print(f"a = {vertices_tensor[I][0][0]}")
+            verts_list.append(verts)
+            faces_list.append(faces)
+
+    # Visualize the current shape
+    save_pickle(verts_list_path, verts_list)
+    save_pickle(faces_list_path, faces_list)
+
+    mesh_list = []
+    for verts, faces in zip(verts_list, faces_list):
+        # print(f"np.shape(verts) = {np.shape(verts)}")
+        # print(f"np.shape(faces) = {np.shape(faces)}")
+        pyvista_faces = np.hstack([np.full((faces.shape[0], 1), 3), faces]).flatten()
+        mesh = pv.PolyData(verts, pyvista_faces)
+        mesh_list.append(mesh)
+
+    save_pickle("mesh_list.pkl", mesh_list)
+    visualize_mesh_list(mesh_list, finger_position, R)
 
     return 0
 
@@ -367,20 +491,11 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="use a trained model to recreate shapes")
     # Arguments for epoch and time indices
-    parser.add_argument("--epoch_index", type=int, help="Specify the epoch index to recreate the shape from")
-    parser.add_argument("--time_index", type=int, help="Specify the time index of processing to recreate the shape from")
-    parser.add_argument("--finger_index", type=int, help="Specify the finger index where the force was applied")
+    parser.add_argument("--epoch_index", type=int, default=2, help="Specify the epoch index to recreate the shape from")
+    parser.add_argument("--time_index", type=int, default=0, help="Specify the time index of processing to recreate the shape from")
+    parser.add_argument("--finger_index", type=int, default=730, help="Specify the finger index where the force was applied")
+    parser.add_argument("--visualize_index", type=int, default=0, help="Specify the finger index where the force was applied")
     args = parser.parse_args()
 
-    if args.epoch_index is None and args.time_index is None:
-        epoch_index, time_index = 80, 0
-    else:
-        epoch_index, time_index = args.epoch_index, args.time_index
-
-    if args.finger_index is None:
-        finger_index = DEFAULT_FINGER_INDEX
-    else:
-        finger_index = args.finger_index
-
-    ret = main(epoch_index, time_index, finger_index)
+    ret = main(args.epoch_index, args.time_index, args.finger_index, args.visualize_index)
     exit(ret)

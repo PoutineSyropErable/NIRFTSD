@@ -23,7 +23,7 @@ SCHEDULER_SWITCH_EPOCH = 3
 DEFAULT_FINGER_INDEX = 730
 
 TIME_PATIENCE = 35
-EPOCH_PATIENCE = 4
+EPOCH_PATIENCE = 2
 
 
 # Global values for signals
@@ -165,7 +165,7 @@ class MeshEncoder(nn.Module):
         latent_dim (int): Dimensionality of the latent vector.
     """
 
-    def __init__(self, input_dim: int = 9001, latent_dim: int = 64):
+    def __init__(self, input_dim: int = 9001, latent_dim: int = LATENT_DIM):
         super(MeshEncoder, self).__init__()
         self.fc1 = nn.Linear(input_dim, 256)
         self.fc2 = nn.Linear(256, 256)
@@ -495,6 +495,9 @@ def train_model(
         else:
             all_ts_shuffled = np.random.permutation(all_ts)
 
+        # Space
+
+        # --------------------- FOR LOOP ---------------------------------
         for i, t_index in enumerate(all_ts_shuffled):
             training_context.optimizer.zero_grad()
 
@@ -521,6 +524,12 @@ def train_model(
             ground_truth_sdf_validate = sdf_values_validate[t_index].unsqueeze(0)  # (1, num_points, 1)
             predicted_sdf_validate = training_context.sdf_calculator(latent_vector, points_validate)
             loss_validate = criterion(predicted_sdf_validate, ground_truth_sdf_validate).item()
+
+            total_loss += loss_training
+            total_validation_loss += loss_validate
+
+            # Custom logging for the learning rate
+            current_lr = training_context.scheduler.get_last_lr()
 
             if epoch < SCHEDULER_SWITCH_EPOCH:
                 # ----- Validation upgrade check
@@ -553,12 +562,6 @@ def train_model(
                     print(f"\t\tSaving previou Epoch to File")
                     with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
                         file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
-
-            total_loss += loss_training
-            total_validation_loss += loss_validate
-
-            # Custom logging for the learning rate
-            current_lr = training_context.scheduler.get_last_lr()
 
             ps1 = f"\t{i: 03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
             ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
@@ -715,8 +718,8 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     # Initialize models
     input_dim = vertices_tensor.shape[1] * vertices_tensor.shape[2]
     print(f"mesh encoder input_dim = {input_dim}")
-    mesh_encoder = MeshEncoder(input_dim=input_dim, latent_dim=64)
-    sdf_calculator = SDFCalculator(latent_dim=64)
+    mesh_encoder = MeshEncoder(input_dim=input_dim, latent_dim=LATENT_DIM)
+    sdf_calculator = SDFCalculator(latent_dim=LATENT_DIM)
 
     global training_context
     training_context = TrainingContext(mesh_encoder, sdf_calculator, finger_index, number_of_shape_per_familly, learning_rate=1e-2)
@@ -724,6 +727,13 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     # Load weights if continuing training
     if continue_training:
         training_context.load_model_weights(epoch_index, time_index)
+
+        training_context.scheduler = ReduceLROnPlateau(training_context.optimizer, mode="min", factor=0.8, patience=EPOCH_PATIENCE)
+        pow = 1
+        for i in range(3 * pow):
+            training_context.scheduler.step(i)
+
+        # This is a monkeys patch to force reducing the scheduler
 
     # Train model
     ret = train_model(
