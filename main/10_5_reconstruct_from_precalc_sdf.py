@@ -11,6 +11,8 @@ GRID_DIM = 100
 
 R = 0.003  # Radius of the FINGER
 KNN_DIR = "./near_neighbor"
+OUTPUT_DIR = "./meshes"
+VIDEO_DIR = "recreated_videos"
 
 
 def read_pickle(directory, filename, finger_index, validate=False):
@@ -169,7 +171,7 @@ def create_3d_points_within_bbox(b_min, b_max, num_points_per_axis):
     return points
 
 
-def get_trained_models(sdf_points, sdf_values):
+def get_trained_models(sdf_points, sdf_values, validate=False):
     """
     Load pre-trained 1-NN models and SDF values if they exist.
     Otherwise, train the models and save them.
@@ -184,11 +186,13 @@ def get_trained_models(sdf_points, sdf_values):
             sdf_values_list: List of corresponding SDF value arrays.
     """
     # Ensure the KNN directory exists
-    os.makedirs(KNN_DIR, exist_ok=True)
+    suffix = "_validate" if validate else ""
+    output_dir = KNN_DIR + suffix
+    os.makedirs(output_dir, exist_ok=True)
 
     # Paths for saving/loading variables
-    nn_models_path = os.path.join(KNN_DIR, "nn_models.pkl")
-    sdf_values_list_path = os.path.join(KNN_DIR, "sdf_values_list.pkl")
+    nn_models_path = os.path.join(output_dir, "nn_models.pkl")
+    sdf_values_list_path = os.path.join(output_dir, "sdf_values_list.pkl")
 
     # Check if pre-trained models and SDF values already exist
     if os.path.exists(nn_models_path) and os.path.exists(sdf_values_list_path):
@@ -257,7 +261,7 @@ def recreate_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, grid
     return verts_list, faces_list
 
 
-def get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, grid_dim, output_dir="meshes"):
+def get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, grid_dim, validate=False):
     """
     Load or recreate meshes for all time indices and save them to disk.
 
@@ -276,6 +280,8 @@ def get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max,
             faces_list (list of np.ndarray): List of faces for each time index.
     """
     # Ensure the output directory exists
+    suffix = "_validate" if validate else ""
+    output_dir = OUTPUT_DIR + suffix
     os.makedirs(output_dir, exist_ok=True)
 
     verts_path = os.path.join(output_dir, "verts_list.pkl")
@@ -318,7 +324,7 @@ def generate_mesh_list(verts_list, faces_list):
     return mesh_list
 
 
-def get_mesh_list(verts_list, faces_list, output_dir="meshes"):
+def get_mesh_list(verts_list, faces_list, validate=False):
     """
     Load or generate the list of PyVista meshes and save them to disk.
 
@@ -331,6 +337,9 @@ def get_mesh_list(verts_list, faces_list, output_dir="meshes"):
         list: List of PyVista PolyData meshes.
     """
     # Ensure the output directory exists
+
+    suffix = "_validate" if validate else ""
+    output_dir = OUTPUT_DIR + suffix
     os.makedirs(output_dir, exist_ok=True)
 
     mesh_list_path = os.path.join(output_dir, "mesh_list.pkl")
@@ -350,7 +359,7 @@ def get_mesh_list(verts_list, faces_list, output_dir="meshes"):
     return mesh_list
 
 
-def visualize_mesh_list(mesh_list, finger_position, R, output_file="mesh_animation.mp4", offscreen=False):
+def visualize_mesh_list(mesh_list, finger_position, R, validate=False, offscreen=False):
     """
     Animate the 3D meshes as an animation and a sphere at the finger position using PyVista.
 
@@ -377,6 +386,8 @@ def visualize_mesh_list(mesh_list, finger_position, R, output_file="mesh_animati
     actor = plotter.add_mesh(mesh_list[0], color="lightblue", show_edges=True)
 
     # Open the movie file for writing
+    suffix = "_validate" if validate else ""
+    output_file = "./" + VIDEO_DIR + "/mesh_recreation" + suffix + ".mp4"
     plotter.open_movie(output_file, framerate=5)
 
     # Set the initial camera position, focal point, and view up
@@ -408,19 +419,20 @@ def visualize_mesh_list(mesh_list, finger_position, R, output_file="mesh_animati
     print(f"Animation saved to {output_file}")
 
 
-def do_all(sdf_points, sdf_values, vertices_tensor, finger_index):
-    nn_models, sdf_values_list = get_trained_models(sdf_points, sdf_values)
-    print("created models")
+def do_all(sdf_points, sdf_values, vertices_tensor, finger_index, validate=False):
 
     # Get SDF value at grid points for all time_index.
     b_min, b_max = find_global_bounding_box(vertices_tensor)
     query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
     print("got query points")
+
+    nn_models, sdf_values_list = get_trained_models(sdf_points, sdf_values, validate)
+    print("created models")
     # Get or recreate meshes
-    verts_list, faces_list = get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, GRID_DIM)
+    verts_list, faces_list = get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, GRID_DIM, validate)
 
     # Get or generate the mesh list
-    mesh_list = get_mesh_list(verts_list, faces_list)
+    mesh_list = get_mesh_list(verts_list, faces_list, validate)
 
     # File containing finger_positions (after filtering)
     FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
@@ -429,43 +441,17 @@ def do_all(sdf_points, sdf_values, vertices_tensor, finger_index):
     # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
     finger_position = finger_positions[finger_index]
 
-    visualize_mesh_list(mesh_list, finger_position, R)
+    visualize_mesh_list(mesh_list, finger_position, R, validate)
 
 
-def main(finger_index):
+def main(finger_index, validate):
     end = 101
     vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[0:end]
-    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[0:end]
-    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[0:end]
-    sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)[0:end]
-    sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)[0:end]
+    sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate)[0:end]
+    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate)[0:end]
 
-    nn_models, sdf_values_list = get_trained_models(sdf_points, sdf_values)
-    print("created models")
-
-    # Get SDF value at grid points for all time_index.
-    b_min, b_max = find_global_bounding_box(vertices_tensor)
-    query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
-    print("got query points")
-    # Get or recreate meshes
-    verts_list, faces_list = get_recreated_meshes(nn_models, sdf_values_list, query_points, b_min, b_max, GRID_DIM)
-    verts = verts_list[0]
-    a_min, a_max = compute_small_bounding_box(verts)
-    c_min, c_max = compute_small_bounding_box(vertices_tensor[0])
-    print(f"Original: c_min = {c_min}, a_max = {c_max}")
-    print(f"recreated: a_min = {a_min}, a_max = {a_max}")
-
-    # Get or generate the mesh list
-    mesh_list = get_mesh_list(verts_list, faces_list)
-
-    # File containing finger_positions (after filtering)
-    FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
-    finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
-    # Swap Y and Z because poylscope uses weird data
-    # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
-    finger_position = finger_positions[finger_index]
-
-    visualize_mesh_list(mesh_list, finger_position, R)
+    os.makedirs(VIDEO_DIR, exist_ok=True)
+    do_all(sdf_points, sdf_values, vertices_tensor, finger_index, validate)
 
 
 if __name__ == "__main__":
@@ -477,6 +463,11 @@ if __name__ == "__main__":
         default=730,
         help="Index of the finger for which data will be processed (default: 730)",
     )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Show validation or training data",
+    )
     args = parser.parse_args()
 
-    main(args.finger_index)
+    main(args.finger_index, args.validate)
