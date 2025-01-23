@@ -686,7 +686,7 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     # Register signal handlers
     signal.signal(signal.SIGTERM, handle_termination_time)  # Kill (no -9)
     signal.signal(signal.SIGINT, handle_termination_epoch)  # KeyboardInterrupt
-    signal.signal(signal.SIGTSTP, handle_termination_time)  # Ctrl+Z
+    # signal.signal(signal.SIGTSTP, handle_termination_time)  # Ctrl+Z
     signal.signal(signal.SIGUSR1, handle_stop_time_signal)
     signal.signal(signal.SIGUSR2, handle_stop_epoch_signal)
     signal.signal(signal.SIGRTMIN, handle_save_epoch_signal)

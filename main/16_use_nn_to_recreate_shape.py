@@ -390,16 +390,14 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
     print("each element standard deviation=\n")
     print(stdl)
 
-    # Add plot title and labels
-    plt.title("First 5 Latent Vectors", fontsize=16)
-    plt.xlabel("Latent Dimension Index", fontsize=12)
+    plt.figure()
+    plt.title("Trajectovry of the first 5 cooridnates of the latent vectors", fontsize=16)
+    plt.xlabel("Time index", fontsize=12)
     plt.ylabel("Latent Value", fontsize=12)
-
-    # Add legend and grid
+    for i in range(5):
+        plt.plot(latent_vectors[i])
     plt.legend(loc="upper right")
     plt.grid(True)
-
-    # Show the plot
     plt.show()
 
     if True:
@@ -429,6 +427,7 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
         print(f"np.shape(faces) = {np.shape(faces)}")
         print(f"faces = {faces}")
         print(f"verts = {verts}")
+        visualize_mesh_old(verts, faces, finger_position, R)
         # visualize_mesh(verts, faces, finger_position, R)
 
     verts_list_path = "verts_list.pkl"
