@@ -19,10 +19,10 @@ LOAD_DIR = "./training_data"
 # Directory where we save and load the neural weights
 NEURAL_WEIGHTS_DIR = "./neural_weights"
 LATENT_DIM = 128
-SCHEDULER_SWITCH_EPOCH = 3
 DEFAULT_FINGER_INDEX = 730
 
-TIME_PATIENCE = 35
+SCHEDULER_SWITCH_EPOCH = 4
+TIME_PATIENCE = 25
 EPOCH_PATIENCE = 2
 
 
@@ -478,7 +478,7 @@ def train_model(
     print(f"\nPrevious mins: {min_training_loss}, {min_validate_loss}\n")
 
     validate_loss_not_increase_counter = 0
-    validate_loss_not_increase_save = 30
+    validate_loss_not_increase_save = 40
     previous_best = 90001  # we should never see this value, but if we do, it wont crash
 
     print("\n-------Start of Training----------\n")
@@ -490,7 +490,11 @@ def train_model(
 
         all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
         if epoch < SCHEDULER_SWITCH_EPOCH:
-            all_ts_shuffled = all_ts
+            if epoch % 2 == 0:
+                all_ts_shuffled = all_ts
+            else:
+                all_ts_shuffled = all_ts[::-1]
+
             # all_ts_shuffled = np.random.permutation(all_ts)
         else:
             all_ts_shuffled = np.random.permutation(all_ts)
@@ -555,7 +559,8 @@ def train_model(
                 tus = tus_start + tus_end
                 vus = " | Validation No Upgrade" if validation_not_upgrade else ""
 
-                if validate_loss_not_increase_counter >= validate_loss_not_increase_save:
+                if validate_loss_not_increase_counter >= TIME_PATIENCE * 1.25:
+                    print(f"\nNo validation change in {np.ceil(TIME_PATIENCE*1.25)} row, saving")
                     validate_loss_not_increase_counter = 0
                     training_context.save_model_weights(SaveMode.NowEpoch)
                     # Write append to a file called validation_tacker.txt epoch and i -1
@@ -563,14 +568,14 @@ def train_model(
                     with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
                         file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
-            ps1 = f"\t{i: 03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
+            ps1 = f"\t{i:03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
             ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
             ps3 = f"[{current_lr[0]:.9e}] "
             ps4 = f"{tus} {vus}" if epoch < SCHEDULER_SWITCH_EPOCH else ""
 
             print(ps1 + ps2 + ps3 + ps4)
             if epoch < SCHEDULER_SWITCH_EPOCH:
-                training_context.scheduler.step(loss_training)
+                training_context.scheduler.step(loss_validate)
 
             loss.backward()
             training_context.optimizer.step()
@@ -642,9 +647,10 @@ def train_model(
             if training_not_upgrade:
                 print(f"the previous best avg_training loss was: {previous_best}\n")
 
-            training_context.scheduler.step(avg_tl)
-            if validate_loss_not_increase_counter >= validate_loss_not_increase_save:
+            training_context.scheduler.step(avg_vl)
+            if validate_loss_not_increase_counter >= EPOCH_PATIENCE * 2:
                 validate_loss_not_increase_counter = 0
+                print(f"\nNo validation change in {np.ceil(EPOCH_PATIENCE * 2)} epochs, saving to files")
                 training_context.save_model_weights(SaveMode.NowEpoch)
                 # Write append to a file called validation_tacker.txt epoch and i -1
                 print(f"\t\tSaving previou Epoch to File")
