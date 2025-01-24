@@ -3,6 +3,7 @@ import argparse
 import os
 import signal
 import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -359,8 +360,8 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
     number_of_shape_per_familly = sdf_points.shape[0]
     mesh_encoder = MeshEncoder(input_dim=input_dim, latent_dim=LATENT_DIM)
     sdf_calculator = SDFCalculator(latent_dim=LATENT_DIM)
-    training_context = TrainingContext(mesh_encoder, sdf_calculator, finger_index, number_of_shape_per_familly, 0.1)
-    training_context.load_model_weights(epoch_index, time_index)
+    training_context = TrainingContext(mesh_encoder, sdf_calculator, finger_index, number_of_shape_per_familly, 0.1, 0.01)
+    # training_context.load_model_weights(epoch_index, time_index)
 
     mesh_encoder = training_context.mesh_encoder
     sdf_calculator = training_context.sdf_calculator
@@ -382,20 +383,50 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
     print(latent_vectors)
 
     print("\n\n")
-    stdl = []
-    for latent_vector_coord in latent_vectors:
-        stdl.append(np.std(latent_vector_coord))
+    # Compute standard deviation and mean for each latent vector coordinate
+    stdl = np.std(latent_vectors, axis=1)
+    meanl = np.mean(latent_vectors, axis=1)
 
-    stdl = np.array(stdl)
-    print("each element standard deviation=\n")
-    print(stdl)
+    # Compute relative change: standard deviation / mean
+    change_rel = stdl / np.abs(meanl)
+    change_rel[np.isnan(change_rel)] = 0  # Handle division by zero if mean is zero
 
+    # Sort by relative standard deviation
+    order = np.argsort(change_rel)[::-1]  # Descending order
+    change_rel_order = change_rel[order]
+    latent_vector_order = latent_vectors[order]
+
+    # Print results
+    print("\n\nRelative change (std / mean) of each latent vector coordinate (ordered):\n")
+    print(change_rel_order)
+    print("\n\nLatent vector coordinates (ordered by relative change):\n")
+    print(latent_vector_order)
+
+    # Visualization of relative change
     plt.figure()
-    plt.title("Trajectovry of the first 5 cooridnates of the latent vectors", fontsize=16)
+    plt.title("Relative Change (std / mean) of Latent Vector Coordinates [Unordered]", fontsize=16)
+    plt.xlabel("Latent Vector Coordinate", fontsize=12)
+    plt.ylabel("Relative Change", fontsize=12)
+    plt.plot(change_rel, marker="o")
+    plt.grid(True)
+    plt.show()
+
+    # Visualization of relative change
+    plt.figure()
+    plt.title("Relative Change (std / mean) of Latent Vector Coordinates [Ordered]", fontsize=16)
+    plt.xlabel("Latent Vector Coordinate (sorted by relative change)", fontsize=12)
+    plt.ylabel("Relative Change", fontsize=12)
+    plt.plot(change_rel_order, marker="o")
+    plt.grid(True)
+    plt.show()
+
+    # Plot trajectory of top 5 latent vector coordinates with highest relative change
+    plt.figure()
+    plt.title("Top 5 Latent Vector Coordinates with Highest Relative Change", fontsize=16)
     plt.xlabel("Time index", fontsize=12)
     plt.ylabel("Latent Value", fontsize=12)
     for i in range(5):
-        plt.plot(latent_vectors[i])
+        plt.plot(latent_vector_order[i], label=f"Coordinate {order[i]}, Rel_Change: {change_rel_order[i]} ")
     plt.legend(loc="upper right")
     plt.grid(True)
     plt.show()

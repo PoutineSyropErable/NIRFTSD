@@ -1,3 +1,12 @@
+"""
+To do: 
+1. Make the cycle length different using different parameters
+2. In 'learn both' epoch switch, using order, set the correct learning rate to what they were. 
+3. Create an array start and end to create a list of ranges. Within those rabge, backstep using total_loss + alpha* latent encoder validation. 
+4. Create an alpha of epoch equation, and set the Hyper parameters for it
+5. Make it so during latent regularization epoch, the learning rate is much slower. Like 10 times smaller
+"""
+
 import pickle
 import argparse
 import os
@@ -6,24 +15,130 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import copy
 from typing import Optional
 
 from enum import Enum
 
+from __send_notification_sl import main as send_notification_to_my_phone
+
 # Directory containing the pickle files
 LOAD_DIR = "./training_data"
 
 # Directory where we save and load the neural weights
 NEURAL_WEIGHTS_DIR = "./neural_weights"
-LATENT_DIM = 128
 DEFAULT_FINGER_INDEX = 730
 
-SCHEDULER_SWITCH_EPOCH = 4
-TIME_PATIENCE = 25
+
+# ------------------ Start of Hyper Parameters
+LATENT_DIM = 128
+START_ENCODER_LR = 0.05
+START_SDF_CALCULATOR_LR = 0.01
+REACTIVE_SDF_LR_VALUE = 0.01
+EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 2  # When the scheduling for time starts
+
+EPOCH_SHUFFLING_START = 4  # When we start shuffling the time index rather then doing it /\/\/\
+EPOCH_SCHEDULER_CHANGE = 20  # When we start stepping the scheduler with the avg validation loss
+EPOCH_WHERE_DROP_MESH_LR = [30]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
+
+# Learning rate of the different scheduling strategy
+TIME_PATIENCE = 10
 EPOCH_PATIENCE = 2
+TIME_FACTOR = 0.9
+EPOCH_FACTOR = 0.6
+
+EPOCH_WHERE_SAVE_ALL = 60  # the epochs where we save the weights after every run
+
+
+NUMBER_EPOCHS = 1000  # Total number of epochs
+
+
+# ---------------------- Learning Cycle Parameters
+class Param(Enum):
+    MeshEncoder = 0
+    SDFCalculator = 1
+    Both = 2
+    Neither = 3
+
+    # Define focus lengths for each learning mode
+
+
+FOCUS_LENGTHS = {
+    Param.Both: 5,  # Focus length for Both
+    Param.MeshEncoder: 10,  # Focus length for MeshEncoder
+    Param.SDFCalculator: 8,  # Focus length for SDFCalculator
+}
+CYCLE_ORDER = [Param.Both, Param.MeshEncoder, Param.SDFCalculator]  # Dynamic focus cycle order
+
+
+def get_previous_focus(cycle_order, current_focus):
+    """
+    Returns the step before the given current_focus in the cycle order.
+
+    Args:
+        cycle_order (list): The list defining the focus cycle order.
+        current_focus (Param): The enum value representing the current focus.
+
+    Returns:
+        Param: The enum value before current_focus in the cycle.
+    """
+    if current_focus not in cycle_order:
+        raise ValueError(f"{current_focus} is not in the cycle_order list.")
+
+    current_index = cycle_order.index(current_focus)  # Find the index of current_focus
+    previous_index = (current_index - 1) % len(cycle_order)  # Get the index of the previous step (cyclically)
+    return cycle_order[previous_index]
+
+
+def generate_focus_switch_points(cycle_order, focus_lengths, number_epochs):
+    """
+    Generate arrays for switch points at the start of each focus step.
+
+    Args:
+        cycle_order (list): List of Param enums defining the focus cycle order.
+        focus_lengths (dict): Dictionary mapping Param enums to their focus lengths.
+        number_epochs (int): Total number of epochs.
+
+    Returns:
+        dict: Dictionary with Param keys and lists of switch epochs as values.
+    """
+    focus_switch_points = {focus: [] for focus in cycle_order}  # Initialize lists for each focus mode
+    epoch = 0
+    while epoch < number_epochs:
+        for focus in cycle_order:
+            if epoch < number_epochs:
+                focus_switch_points[focus].append(epoch)
+                epoch += focus_lengths[focus]
+            else:
+                break
+    return focus_switch_points
+
+
+# Generate arrays for switch points
+focus_switch_points = generate_focus_switch_points(CYCLE_ORDER, FOCUS_LENGTHS, NUMBER_EPOCHS)
+
+# Assign arrays to specific variables for clarity
+EPOCH_LEARN_BOTH = focus_switch_points[Param.Both]
+EPOCH_LEARN_MESH_ENCODER = focus_switch_points[Param.MeshEncoder]
+EPOCH_LEARN_SDF_CALCULATOR = focus_switch_points[Param.SDFCalculator]
+
+# Print arrays for verification
+print("EPOCH_LEARN_MESH_ENCODER:", EPOCH_LEARN_MESH_ENCODER)
+print("EPOCH_LEARN_SDF_CALCULATOR:", EPOCH_LEARN_SDF_CALCULATOR)
+print("EPOCH_LEARN_BOTH:", EPOCH_LEARN_BOTH)
+
+
+# Example usage of get_previous_focus
+current_focus = Param.Both
+previous_focus = get_previous_focus(CYCLE_ORDER, current_focus)
+print(f"The step before {current_focus.name} is {previous_focus.name}.")
+
+
+# ----- Latent vector regularization to force difference
+# Cancelled because it didn't work
+
+# ------------------ END of Hyper Parameters
 
 
 # Global values for signals
@@ -233,9 +348,160 @@ def load_dict_from_path(object1, path):
         raise FileNotFoundError(f"Weights/State file not found: {path} Doesn't exist")
 
 
+class CustomLRScheduler:
+    def __init__(self, optimizer, factor=0.5, patience=10, verbose=False):
+        """
+        Custom learning rate scheduler with adjustable factors and patience.
+
+        Args:
+            optimizer (torch.optim.Optimizer): Optimizer with parameter groups for the encoder and SDF calculator.
+            factor (float): Multiplicative factor for reducing the learning rate.
+            patience (int): Number of steps without improvement to wait before reducing the LR.
+        """
+        self.optimizer = optimizer
+        self.factor = factor
+        self.patience = patience
+        self.steps_since_improvement = 0
+        self.errors_since_saving = 0
+        self.best_loss = float("inf")
+        self.verbose = verbose
+
+    def set_patience_and_factor(self, patience, factor):
+        """
+        Set the patience and factor for learning rate adjustment.
+
+        Args:
+            patience (int): New patience value.
+            factor (float): New multiplicative factor.
+        """
+        self.patience = patience
+        self.factor = factor
+        if self.verbose:
+            print(f"Scheduler updated: patience = {self.patience}, factor = {self.factor}")
+
+    def set_min_loss(self, best_loss: float, reset_counter: bool = True):
+        """
+        Update the best loss value and optionally reset the counters.
+
+        Args:
+            best_loss (float): New best loss value.
+            reset_counter (bool): Whether to reset the counter for steps since improvement.
+        """
+        self.best_loss = best_loss
+        if reset_counter:
+            self.steps_since_improvement = 0
+            self.errors_since_saving = 0
+
+    def set_encoder_lr(self, new_lr: float):
+        """Set the learning rate for the MeshEncoder."""
+        self.optimizer.param_groups[Param.MeshEncoder.value]["lr"] = new_lr
+        if self.verbose:
+            print(f"Updated MeshEncoder LR to {new_lr}")
+
+    def set_sdf_calculator_lr(self, new_lr: float):
+        """Set the learning rate for the SDFCalculator."""
+        self.optimizer.param_groups[Param.SDFCalculator.value]["lr"] = new_lr
+        if self.verbose:
+            print(f"Updated SDFCalculator LR to {new_lr}")
+
+    def get_last_lr(self):
+        """Get the current learning rates for all parameter groups."""
+        return [param_group["lr"] for param_group in self.optimizer.param_groups]
+
+    def step(self, validation_loss, target=Param.Both, saving_factor: float = 2.0):
+        """
+        Update learning rates based on validation loss.
+
+        Args:
+            validation_loss (float): Validation loss to track improvement.
+            target (Param): Which parameter group to adjust (MeshEncoder, SDFCalculator, or Both).
+            saving_factor (float): Factor to decide when to return `1` for saving.
+
+        Returns:
+            validation_not_improved, lowered_lr, save_to_file
+        """
+        if validation_loss is None:
+            raise ValueError("Validation loss must be provided for the scheduler to operate.")
+
+        # Check for improvement
+        if validation_loss < self.best_loss:
+            self.best_loss = validation_loss
+            self.steps_since_improvement = 0
+            self.errors_since_saving = 0
+            validation_not_improved = False
+        else:
+            self.steps_since_improvement += 1
+            self.errors_since_saving += 1
+            validation_not_improved = True
+
+        # Reduce learning rates for the specified parameter group(s)
+        if self.steps_since_improvement >= self.patience:
+            if target in [Param.MeshEncoder, Param.Both]:
+                current_lr = self.optimizer.param_groups[Param.MeshEncoder.value]["lr"]
+                self.set_encoder_lr(current_lr * self.factor)
+
+            if target in [Param.SDFCalculator, Param.Both]:
+                current_lr = self.optimizer.param_groups[Param.SDFCalculator.value]["lr"]
+                self.set_sdf_calculator_lr(current_lr * self.factor)
+
+            self.steps_since_improvement = 0  # Reset patience counter
+            return validation_not_improved, True, False
+
+        # Trigger saving if errors since saving exceed patience * (saving_factor - 1)
+        if self.errors_since_saving >= self.patience * (saving_factor - 1):
+            self.errors_since_saving = 0  # Reset saving counter
+            return validation_not_improved, True, False  # Indicate that a saving event should occur
+
+        return validation_not_improved, False, False  # No adjustment was made
+
+
+class DummyScheduler:
+    def __init__(self):
+        """
+        A dummy scheduler that tracks training loss and determines whether
+        training has improved or not based on a minimum recorded loss.
+        """
+        self.min_loss = float("inf")
+
+    def set_min_loss(self, min_loss: float):
+        """
+        Set a new minimum loss for the scheduler to track improvements.
+
+        Args:
+            min_loss (float): The minimum loss value to set.
+        """
+        self.min_loss = min_loss
+        print(f"Minimum loss set to: {self.min_loss}")
+
+    def step(self, training_loss: float) -> bool:
+        """
+        Check if the current training loss indicates improvement over the minimum loss.
+
+        Args:
+            training_loss (float): The current training loss.
+
+        Returns:
+            bool: True if the training loss is NOT an improvement (training_not_upgrade),
+                  False if the training loss is an improvement.
+        """
+        if training_loss < self.min_loss:
+            self.min_loss = training_loss
+            # print(f"\t\t\tNew minimum loss achieved: {self.min_loss}")
+            return False  # Training is improved
+
+        # print(f"\t\t\tNo improvement in training loss. Current: {training_loss}, Min: {self.min_loss}")
+        return True  # Training not improved
+
+
 class TrainingContext:
     def __init__(
-        self, encoder: MeshEncoder, sdf_calculator: SDFCalculator, finger_index: int, number_shape_per_familly: int, learning_rate: float
+        self,
+        encoder: MeshEncoder,
+        sdf_calculator: SDFCalculator,
+        finger_index: int,
+        number_shape_per_familly: int,
+        encoder_lr: float,
+        sdf_calculator_lr: float,
     ):
         self.finger_index = finger_index
 
@@ -257,15 +523,45 @@ class TrainingContext:
         self.mesh_encoder = encoder
         self.sdf_calculator = sdf_calculator
 
+        # Define separate parameter groups for the optimizer
         self.optimizer: torch.optim.Optimizer = torch.optim.Adam(
-            list(self.mesh_encoder.parameters()) + list(self.sdf_calculator.parameters()),
-            lr=learning_rate,
+            [
+                {"params": self.mesh_encoder.parameters(), "lr": encoder_lr},
+                {"params": self.sdf_calculator.parameters(), "lr": sdf_calculator_lr},
+            ]
         )
-        self.scheduler: ReduceLROnPlateau = ReduceLROnPlateau(self.optimizer, mode="min", factor=0.92, patience=TIME_PATIENCE)
-        # verbose is deprecated and gone
+        self.scheduler: CustomLRScheduler = CustomLRScheduler(self.optimizer, factor=TIME_FACTOR, patience=TIME_PATIENCE)
+        self.dummy_scheduler: DummyScheduler = DummyScheduler()  # only for training improvement tracking
 
         self.loss_tracker: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
         self.loss_tracker_validate: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
+
+    def get_learning_rates(self):
+        """
+        Retrieve the current learning rates for the encoder and SDF calculator.
+
+        Returns:
+            tuple: (encoder_lr, sdf_calculator_lr)
+        """
+        return self.scheduler.get_last_lr()
+
+    def adjust_encoder_lr(self, new_lr: float):
+        """
+        Adjust the learning rate for the MeshEncoder.
+
+        Args:
+            new_lr (float): The new learning rate for the MeshEncoder.
+        """
+        self.scheduler.set_encoder_lr(new_lr)
+
+    def adjust_sdf_calculator_lr(self, new_lr: float):
+        """
+        Adjust the learning rate for the SDFCalculator.
+
+        Args:
+            new_lr (float): The new learning rate for the SDFCalculator.
+        """
+        self.scheduler.set_sdf_calculator_lr(new_lr)
 
     def load_model_weights(self, epoch_index, time_index):
         encoder_weights_path = get_path("encoder", epoch_index, time_index, self.finger_index)
@@ -277,10 +573,10 @@ class TrainingContext:
 
         load_dict_from_path(self.mesh_encoder, encoder_weights_path)
         load_dict_from_path(self.sdf_calculator, calculator_weights_path)
-        print(f"loading optimizer from {optimizer_state_path}")
         load_dict_from_path(self.optimizer, optimizer_state_path)
-        print(f"loading scheduler from {scheduler_state_path}")
-        load_dict_from_path(self.scheduler, scheduler_state_path)
+
+        with open(scheduler_state_path, "rb") as file:
+            self.scheduler = pickle.load(file)
 
         with open(loss_tracker_path, "rb") as file:
             self.loss_tracker = pickle.load(file)
@@ -363,7 +659,7 @@ class TrainingContext:
         torch.save(encoder_weights, encoder_weights_path)
         torch.save(sdf_calculator_weights, calculator_weights_path)
         torch.save(optimizer_state, optimizer_state_path)
-        torch.save(scheduler_state, scheduler_state_path)
+        save_pickle(scheduler_state_path, scheduler_state)
         save_pickle(loss_tracker_path, loss_tracker)
         save_pickle(loss_tracker_validate_path, loss_tracker_validate)
 
@@ -379,7 +675,7 @@ class TrainingContext:
 
         self.previous_calculator_weights_time = copy.deepcopy(self.sdf_calculator.state_dict())
         self.previous_optimizer_state_time = copy.deepcopy(self.optimizer.state_dict())
-        self.previous_scheduler_state_time = copy.deepcopy(self.scheduler.state_dict())
+        self.previous_scheduler_state_time = copy.deepcopy(self.scheduler)
         self.previous_time_index = time_index
         # print(f"time update called, {self.previous_time_index}")
 
@@ -387,15 +683,15 @@ class TrainingContext:
         self.previous_encoder_weights_epoch = copy.deepcopy(self.mesh_encoder.state_dict())
         self.previous_calculator_weights_epoch = copy.deepcopy(self.sdf_calculator.state_dict())
         self.previous_optimizer_state_epoch = copy.deepcopy(self.optimizer.state_dict())
-        self.previous_scheduler_state_epoch = copy.deepcopy(self.scheduler.state_dict())
+        self.previous_scheduler_state_epoch = copy.deepcopy(self.scheduler)
         self.previous_epoch_index = epoch_index
 
 
 def get_previous_min(training_context, start_epoch):
-    min_validate_loss = 9001.666
-    min_training_loss = 9001.666
+    min_validate_loss = float("inf")
+    min_training_loss = float("inf")
 
-    if start_epoch < SCHEDULER_SWITCH_EPOCH:
+    if start_epoch < EPOCH_SCHEDULER_CHANGE:
         for loss_validates in training_context.loss_tracker_validate:
             loss_validates_non_zero = loss_validates[loss_validates > 0]
             if len(loss_validates_non_zero) == 0:
@@ -430,6 +726,31 @@ def get_previous_min(training_context, start_epoch):
                 min_training_loss = min_loss
 
     return min_training_loss, min_validate_loss
+
+
+def get_upgrade_message(validation_not_upgrade: bool, training_not_upgrade: bool) -> str:
+    """
+    Construct an upgrade message to append to training/validation log entries.
+
+    Args:
+        validation_not_upgrade (bool): Whether validation has not improved.
+        training_not_upgrade (bool): Whether training has not improved.
+
+    Returns:
+        str: The formatted upgrade message.
+    """
+    # Fixed length for messages to ensure alignment
+    training_message = "Training No Upgrade"
+    validation_message = "Validation No Upgrade"
+
+    # Construct training message
+    training_status = f" | {training_message}" if training_not_upgrade else f" | {' ' * len(training_message)}"
+
+    # Construct validation message
+    validation_status = f" | {validation_message}" if validation_not_upgrade else f"{' ' * (len(validation_message) + 3)}"
+
+    # Combine messages
+    return training_status + validation_status
 
 
 def train_model(
@@ -474,14 +795,15 @@ def train_model(
     criterion = nn.MSELoss()
 
     min_training_loss, min_validate_loss = get_previous_min(training_context, start_epoch)
+    training_context.scheduler.set_min_loss(min_validate_loss)
+    training_context.dummy_scheduler.set_min_loss(min_training_loss)
 
     print(f"\nPrevious mins: {min_training_loss}, {min_validate_loss}\n")
 
-    validate_loss_not_increase_counter = 0
-    validate_loss_not_increase_save = 40
-    previous_best = 90001  # we should never see this value, but if we do, it wont crash
+    training_context.save_model_weights(SaveMode.NowEpoch)
 
     print("\n-------Start of Training----------\n")
+
     # Training loop
     for epoch in range(start_epoch, epochs):
         print(f"\nstart of epoch {epoch}")
@@ -489,21 +811,59 @@ def train_model(
         total_validation_loss: float = 0
 
         all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
-        if epoch < SCHEDULER_SWITCH_EPOCH:
+
+        if epoch < EPOCH_SHUFFLING_START:
             if epoch % 2 == 0:
                 all_ts_shuffled = all_ts
             else:
                 all_ts_shuffled = all_ts[::-1]
 
-            # all_ts_shuffled = np.random.permutation(all_ts)
         else:
             all_ts_shuffled = np.random.permutation(all_ts)
 
         # Space
 
-        # --------------------- FOR LOOP ---------------------------------
+        if epoch == EPOCH_SHUFFLING_START:
+            print("________________________STARTING TO SHUFFLE THE TIME ITTERATION________________________")
+
+        if epoch == EPOCH_WHERE_DROP_MESH_LR:
+            print("________________________DROPPING MESH ENCONDER LEARNING RATE TO SDF CALCULATOR LEARNING RATE________________________")
+            _, sdf_calculator_lr = training_context.get_learning_rates()
+            if sdf_calculator_lr == 0:
+                sdf_calculator_lr = previous_sdf_calculator_lr
+                print("------USING PREVIOUS SDF LR SINCE IT WAS 0 ------------")
+            training_context.adjust_encoder_lr(sdf_calculator_lr)
+
+        if epoch in EPOCH_LEARN_MESH_ENCODER:
+            print("________________________SETTING SDF CALCULATOR LEARNING RATE TO 0 TO LEARN THE MESH ENCODING________________________")
+            _, previous_sdf_calculator_lr = training_context.get_learning_rates()
+            training_context.adjust_encoder_lr(previous_mesh_encoder_lr)
+            training_context.adjust_sdf_calculator_lr(0)
+
+        if epoch in EPOCH_LEARN_SDF_CALCULATOR:
+            print("________________________SETTING SDF CALCULATOR LEARNING RATE TO 0 TO LEARN THE MESH ENCODING________________________")
+            previous_mesh_encoder_lr, _ = training_context.get_learning_rates()
+            training_context.adjust_sdf_calculator_lr(previous_sdf_calculator_lr)
+            training_context.adjust_encoder_lr(0)
+
+        if epoch == EPOCH_LEARN_BOTH:
+            print(
+                f"________________________SETTING SDF CALCULATOR LEARNING RATE TO {REACTIVE_SDF_LR_VALUE} TO DO MIXED LEARNING________________________"
+            )
+            prev = get_previous_focus(CYCLE_ORDER, Param.Both)
+            if prev == Param.MeshEncoder:
+                training_context.adjust_encoder_lr(previous_mesh_encoder_lr)
+            if prev == Param.SDFCalculator:
+                training_context.adjust_sdf_calculator_lr(previous_sdf_calculator_lr)
+
+        current_lr = training_context.scheduler.get_last_lr()
+        print(f"current lr = {current_lr}")
+        if current_lr[0] == 0 and current_lr[1] == 0:
+            return 2
+
+        # ------------------------------------------------------------------------------------------ FOR LOOP ---------------------------------------------------------------------
+        all_latent_vector = []
         for i, t_index in enumerate(all_ts_shuffled):
-            training_context.optimizer.zero_grad()
 
             # ------------ Get data for the current time step
             # Flatten vertices (1, num_vertices * 3)
@@ -532,52 +892,31 @@ def train_model(
             total_loss += loss_training
             total_validation_loss += loss_validate
 
-            # Custom logging for the learning rate
-            current_lr = training_context.scheduler.get_last_lr()
-
-            if epoch < SCHEDULER_SWITCH_EPOCH:
-                # ----- Validation upgrade check
-                if loss_validate > min_validate_loss:
-                    validate_loss_not_increase_counter += 1
-                    validation_not_upgrade = True
+            if epoch < EPOCH_SCHEDULER_CHANGE:
+                if epoch < EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING:
+                    validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
+                        loss_validate, Param.Neither, saving_factor=1.4
+                    )
                 else:
-                    validation_not_upgrade = False
-                    validate_loss_not_increase_counter = 0
-                    min_validate_loss = loss_validate
+                    validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
+                        loss_validate, Param.Both, saving_factor=1.4
+                    )
+                training_not_upgrade = training_context.dummy_scheduler.step(loss_training)
 
-                # ----- Training upgrade check
-                if loss_training > min_training_loss:
-                    training_not_upgrade = True
-                else:
-                    training_not_upgrade = False
-                    min_training_loss = loss_training
+                # Custom logging for the learning rate
+                current_lr = training_context.scheduler.get_last_lr()
 
-                # Training/Validate upgrade string and messages. (tusm)
-                tusm = "Training No Upgrade"
-                tus_start = " | " if (validation_not_upgrade or training_not_upgrade) else ""
-                tus_end = tusm if training_not_upgrade else " " * len(tusm)
-                tus = tus_start + tus_end
-                vus = " | Validation No Upgrade" if validation_not_upgrade else ""
-
-                if validate_loss_not_increase_counter >= TIME_PATIENCE * 1.25:
-                    print(f"\nNo validation change in {np.ceil(TIME_PATIENCE*1.25)} row, saving")
-                    validate_loss_not_increase_counter = 0
-                    training_context.save_model_weights(SaveMode.NowEpoch)
-                    # Write append to a file called validation_tacker.txt epoch and i -1
-                    print(f"\t\tSaving previou Epoch to File")
-                    with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
-                        file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
+                upgrade_message = get_upgrade_message(validation_not_upgrade, training_not_upgrade)
 
             ps1 = f"\t{i:03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
             ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
-            ps3 = f"[{current_lr[0]:.9e}] "
-            ps4 = f"{tus} {vus}" if epoch < SCHEDULER_SWITCH_EPOCH else ""
+            ps3 = f"{current_lr}"
+            ps4 = f"{upgrade_message}" if epoch < EPOCH_SCHEDULER_CHANGE else ""
 
             print(ps1 + ps2 + ps3 + ps4)
-            if epoch < SCHEDULER_SWITCH_EPOCH:
-                training_context.scheduler.step(loss_validate)
 
-            loss.backward()
+            training_context.optimizer.zero_grad()
+            loss.backward(retain_graph=True)
             training_context.optimizer.step()
 
             training_context.loss_tracker[epoch][i] = loss_training
@@ -600,60 +939,29 @@ def train_model(
         avg_vl = total_validation_loss / vertices_tensor.shape[0]
 
         training_distance, validation_distance = np.sqrt(avg_tl), np.sqrt(avg_vl)
-        if epoch == SCHEDULER_SWITCH_EPOCH:
-            """It will still do optimisation on every data from the batch. That's just for the scheduler"""
-            print(f"reached epoch {SCHEDULER_SWITCH_EPOCH}, changing the scheduler to epoch wise")
-            training_context.scheduler = ReduceLROnPlateau(
-                training_context.optimizer,
-                mode="min",
-                factor=0.75,
-                patience=EPOCH_PATIENCE,
-            )  # verbose is gone
-            min_validate_loss = avg_vl
-            min_training_loss = avg_tl
+        if epoch == EPOCH_SCHEDULER_CHANGE:
+            print(
+                f"________________________REACHED EPOCH: {EPOCH_SCHEDULER_CHANGE}, CHANGING THE SCHEDULING TO EPOCH WISE________________________"
+            )
+            training_context.scheduler.set_min_loss(avg_vl)
+            training_context.dummy_scheduler.set_min_loss(avg_tl)
 
-        if epoch >= SCHEDULER_SWITCH_EPOCH:
-            # ----- Validation upgrade check
-            if avg_vl <= min_validate_loss:
-                validation_not_upgrade = False
-                min_validate_loss = avg_vl
-                validate_loss_not_increase_counter = 0
-            else:
-                validate_loss_not_increase_counter += 1
-                validation_not_upgrade = True
+        if epoch >= EPOCH_SCHEDULER_CHANGE:
+            validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(avg_vl, Param.Both, saving_factor=2.0)
+            training_not_upgrade = training_context.dummy_scheduler.step(avg_tl)
 
-            # ----- Training upgrade check
-            if avg_tl <= min_training_loss:
-                training_not_upgrade = False
-                previous_best = min_training_loss
-                min_training_loss = avg_tl
-            else:
-                training_not_upgrade = True
-
-            # Training/Validate upgrade string and messages. (tusm)
-            tusm = "Training No Upgrade"
-            tus_start = " | " if (validation_not_upgrade or training_not_upgrade) else ""
-            tus_end = tusm if training_not_upgrade else " " * len(tusm)
-            tus = tus_start + tus_end
-            vus = " | Validation No Upgrade" if validation_not_upgrade else ""
+            upgrade_message = get_upgrade_message(validation_not_upgrade, training_not_upgrade)
 
             # Step the scheduler
-            print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_vl } {tus} {vus}")
+            print(f" End of Epoch {epoch}/{epochs -1}, AVG Training Loss: {avg_tl}, AVG Validate Loss: { avg_vl }{upgrade_message}")
             ps1 = f" Training distance: {training_distance}, "
             ps2 = f"Validation Distance: {validation_distance}, Distance Scale: {dL2}, "
             ps3 = f"Val Ratio: {validation_distance/dL2}"
             print(ps1 + ps2 + ps3)
 
-            if training_not_upgrade:
-                print(f"the previous best avg_training loss was: {previous_best}\n")
-
-            training_context.scheduler.step(avg_vl)
-            if validate_loss_not_increase_counter >= EPOCH_PATIENCE * 2:
-                validate_loss_not_increase_counter = 0
+            if save_to_file:
                 print(f"\nNo validation change in {np.ceil(EPOCH_PATIENCE * 2)} epochs, saving to files")
                 training_context.save_model_weights(SaveMode.NowEpoch)
-                # Write append to a file called validation_tacker.txt epoch and i -1
-                print(f"\t\tSaving previou Epoch to File")
                 with open(f"validation_tracker_{training_context.finger_index}.txt", "a") as file:
                     file.write(f"Epoch: {epoch}, Time Index: {i - 1}\n")
 
@@ -666,7 +974,7 @@ def train_model(
 
         training_context.epoch_update(epoch)
 
-        if epoch % 10 == 1:
+        if epoch % 10 == 1 or epoch < EPOCH_WHERE_SAVE_ALL:
             training_context.save_model_weights(SaveMode.NextEpochItteration)
 
         # Handle stop epoch signal
@@ -694,6 +1002,8 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
 
     # Ensure the weights directory exists
     os.makedirs(NEURAL_WEIGHTS_DIR, exist_ok=True)
+
+    # send_notification_to_my_phone("Machine Learning", "Starting new run")
 
     end = 101
     # We don't use the last data, and this also lets us cut the data for tests
@@ -728,33 +1038,47 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     sdf_calculator = SDFCalculator(latent_dim=LATENT_DIM)
 
     global training_context
-    training_context = TrainingContext(mesh_encoder, sdf_calculator, finger_index, number_of_shape_per_familly, learning_rate=1e-2)
+    training_context = TrainingContext(
+        mesh_encoder,
+        sdf_calculator,
+        finger_index,
+        number_of_shape_per_familly,
+        encoder_lr=START_ENCODER_LR,
+        sdf_calculator_lr=START_SDF_CALCULATOR_LR,
+    )
 
     # Load weights if continuing training
     if continue_training:
         training_context.load_model_weights(epoch_index, time_index)
 
-        training_context.scheduler = ReduceLROnPlateau(training_context.optimizer, mode="min", factor=0.8, patience=EPOCH_PATIENCE)
-        pow = 1
+        training_context.scheduler = CustomLRScheduler(training_context.optimizer, factor=0.8, patience=EPOCH_PATIENCE)
+        pow = 0
         for i in range(3 * pow):
             training_context.scheduler.step(i)
 
         # This is a monkeys patch to force reducing the scheduler
 
-    # Train model
-    ret = train_model(
-        training_context,
-        vertices_tensor,
-        sdf_points,
-        sdf_values,
-        sdf_points_validate,
-        sdf_values_validate,
-        epochs=1000,
-        start_epoch=epoch_index or 0,
-        start_time=time_index or 0,
-    )
-
-    return ret
+    try:
+        # Train model
+        ret = train_model(
+            training_context,
+            vertices_tensor,
+            sdf_points,
+            sdf_values,
+            sdf_points_validate,
+            sdf_values_validate,
+            epochs=NUMBER_EPOCHS,
+            start_epoch=epoch_index or 0,
+            start_time=time_index or 0,
+        )
+        if ret == 2:
+            send_notification_to_my_phone("Machine Learning", "All weights zero")
+        else:
+            send_notification_to_my_phone("Machine Learning", "End of training, come back")
+        return ret
+    except:
+        send_notification_to_my_phone("Machine Learning", "Training crashed, come back")
+        return 1
 
 
 if __name__ == "__main__":

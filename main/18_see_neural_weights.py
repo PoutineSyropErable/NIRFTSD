@@ -28,39 +28,53 @@ def read_pickle(directory, filename, finger_index, validate=False):
 
 def main():
     finger_index = 730
-    epoch_index = 339
-    time_index = 0
     vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
-    faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[:-1]
-    sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[:-1]
 
     # Convert inputs to PyTorch tensors
     vertices_tensor = torch.tensor(vertices_tensor_np, dtype=torch.float32)  # (time_steps, num_vertices, 3)
-    sdf_points = torch.tensor(sdf_points, dtype=torch.float32)  # (time_steps, num_points, 3)
-    sdf_values = torch.tensor(sdf_values, dtype=torch.float32).unsqueeze(-1)  # (time_steps, num_points, 1)
     input_dim = vertices_tensor.shape[1] * vertices_tensor.shape[2]  # num_vertices * 3
 
     number_of_shape_per_familly = sdf_points.shape[0]
     mesh_encoder = MeshEncoder(input_dim=input_dim, latent_dim=LATENT_DIM)
     sdf_calculator = SDFCalculator(latent_dim=LATENT_DIM)
-    training_context = TrainingContext(mesh_encoder, sdf_calculator, finger_index, number_of_shape_per_familly, 0.1, 0.01)
-    training_context.load_model_weights(epoch_index, time_index)
+    training_context = TrainingContext(mesh_encoder, sdf_calculator, finger_index, number_of_shape_per_familly, 0.1)
 
-    losses = training_context.loss_tracker_validate
-    loss_mean = [np.mean(loss) for loss in losses]
-    loss_max = [np.max(loss) for loss in losses]
+    epochs = list(range(2, 303, 10))
+    weight_norms = []
+    weight_stds = []
+    for epoch_index in epochs:
+        training_context.load_model_weights(epoch_index, 0)
+        weights = list(training_context.mesh_encoder.parameters())
+        weight_norm = sum(torch.norm(w).item() for w in weights)  # Compute the norm of all weights
+        weight_std = torch.std(torch.cat([w.flatten() for w in weights])).item()
+        weight_norms.append(weight_norm)
+        weight_stds.append(weight_std)
 
-    plt.figure()
-    plt.title("mean and max loss over epochs")
-    plt.xlabel("epoch")
-    plt.ylabel("loss")
-    plt.plot(loss_mean[5:], label="mean")
-    plt.plot(loss_max[5:], label="max")
+    print(f"weight_norms = \n{weight_norms}\n")
+    print(f"weight_stds = \n{weight_stds}\n")
+    # Plot the weight norms as a function of epochs
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, weight_norms, marker="o", label="Weight Norm")
+    plt.title("Weight Norms as a Function of Epochs")
+    plt.xlabel("Epoch")
+    plt.ylabel("Weight Norm")
+    plt.grid(True)
     plt.legend()
+    plt.tight_layout()
     plt.show()
 
-    pass
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, weight_stds, marker="o", label="Weight STDs")
+    plt.title("Weight STDs as a Function of Epochs")
+    plt.xlabel("Epoch")
+    plt.ylabel("Weight STDs")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    return 0
 
 
 main()
