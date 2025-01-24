@@ -75,6 +75,35 @@ def compute_enlarged_bounding_box(mesh_points: np.ndarray, box_ratio: float = 1.
     return b_min, b_max
 
 
+def find_global_bounding_box(vertices_tensor):
+    """
+    Compute the minimum-sized bounding box (b_min, b_max) for all vertices.
+
+    Args:
+        vertices_tensor (list of np.ndarray): List of vertex arrays, where each array is of shape (num_vertices, 3).
+        compute_enlarged_bounding_box (function): Function to compute bounding box for a single vertex array.
+
+    Returns:
+        tuple: (b_min, b_max), where:
+            b_min (np.ndarray): Minimum corner of the global bounding box [x_min, y_min, z_min].
+            b_max (np.ndarray): Maximum corner of the global bounding box [x_max, y_max, z_max].
+    """
+    # Initialize global bounds
+    global_b_min = np.array([np.inf, np.inf, np.inf])  # Large initial value for min
+    global_b_max = np.array([-np.inf, -np.inf, -np.inf])  # Small initial value for max
+
+    # Iterate over each vertex array
+    for verts in vertices_tensor:
+        # Compute the bounding box for the current vertices
+        b_min_temp, b_max_temp = compute_enlarged_bounding_box(verts)
+
+        # Update the global bounds
+        global_b_min = np.minimum(global_b_min, b_min_temp)  # Element-wise min
+        global_b_max = np.maximum(global_b_max, b_max_temp)  # Element-wise max
+
+    return global_b_min, global_b_max
+
+
 def load_model_weights(encoder, calculator, epoch_index, time_index):
     """
     Placeholder function to load the weights for the encoder and calculator models.
@@ -366,83 +395,17 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
     mesh_encoder = training_context.mesh_encoder
     sdf_calculator = training_context.sdf_calculator
 
-    latent_vector_list = []
-    for I in range(len(vertices_tensor) - 1):
-        # Extract the latent vector from the mesh encoder
-        vertices = vertices_tensor[I].view(1, -1)  # Flatten the vertices
-        latent_vector = mesh_encoder(vertices)  # Shape (1, latent_dim)
-        latent_vector_np = latent_vector.detach().cpu().numpy().flatten()
-        latent_vector_list.append(latent_vector_np)
-        # print(f"Latent vector at index {I}: {latent_vector_np}")
-
-    # Calculate the standard deviation of each latent dimension across time
-
-    print("\n\n")
-    latent_vectors = np.array(latent_vector_list).T
-    print(np.shape(latent_vectors))
-    print(latent_vectors)
-
-    print("\n\n")
-    # Compute standard deviation and mean for each latent vector coordinate
-    stdl = np.std(latent_vectors, axis=1)
-    meanl = np.mean(latent_vectors, axis=1)
-
-    # Compute relative change: standard deviation / mean
-    change_rel = stdl / np.abs(meanl)
-    change_rel[np.isnan(change_rel)] = 0  # Handle division by zero if mean is zero
-
-    # Sort by relative standard deviation
-    order = np.argsort(change_rel)[::-1]  # Descending order
-    change_rel_order = change_rel[order]
-    latent_vector_order = latent_vectors[order]
-
-    # Print results
-    print("\n\nRelative change (std / mean) of each latent vector coordinate (ordered):\n")
-    print(change_rel_order)
-    print("\n\nLatent vector coordinates (ordered by relative change):\n")
-    print(latent_vector_order)
-
-    # Visualization of relative change
-    plt.figure()
-    plt.title("Relative Change (std / mean) of Latent Vector Coordinates [Unordered]", fontsize=16)
-    plt.xlabel("Latent Vector Coordinate", fontsize=12)
-    plt.ylabel("Relative Change", fontsize=12)
-    plt.plot(change_rel, marker="o")
-    plt.grid(True)
-    plt.show()
-
-    # Visualization of relative change
-    plt.figure()
-    plt.title("Relative Change (std / mean) of Latent Vector Coordinates [Ordered]", fontsize=16)
-    plt.xlabel("Latent Vector Coordinate (sorted by relative change)", fontsize=12)
-    plt.ylabel("Relative Change", fontsize=12)
-    plt.plot(change_rel_order, marker="o")
-    plt.grid(True)
-    plt.show()
-
-    # Plot trajectory of top 5 latent vector coordinates with highest relative change
-    plt.figure()
-    plt.title("Top 5 Latent Vector Coordinates with Highest Relative Change", fontsize=16)
-    plt.xlabel("Time index", fontsize=12)
-    plt.ylabel("Latent Value", fontsize=12)
-    for i in range(5):
-        plt.plot(latent_vector_order[i], label=f"Coordinate {order[i]}, Rel_Change: {change_rel_order[i]} ")
-    plt.legend(loc="upper right")
-    plt.grid(True)
-    plt.show()
-
-    if True:
+    # File containing finger_positions (after filtering)
+    FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
+    finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
+    # Swap Y and Z because poylscope uses weird data
+    # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
+    finger_position = finger_positions[finger_index]
+    R = 0.003  # Radius of the FINGER
+    if False:
         b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[visualize_index])
         print("\n")
         print(f"b_min = {b_min}\nb_max = {b_max}")
-
-        # File containing finger_positions (after filtering)
-        FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
-        finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
-        # Swap Y and Z because poylscope uses weird data
-        # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
-        finger_position = finger_positions[finger_index]
-        R = 0.003  # Radius of the FINGER
 
         query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
         sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, visualize_index, query_points)
@@ -463,6 +426,12 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
 
     verts_list_path = "verts_list.pkl"
     faces_list_path = "faces_list.pkl"
+
+    b_min, b_max = find_global_bounding_box(vertices_tensor_np)
+
+    if os.path.exists(verts_list_path) and os.path.exists(faces_list_path):
+        os.remove(verts_list_path)
+        os.remove(faces_list_path)
     n = 100
     if os.path.exists(verts_list_path) and os.path.exists(faces_list_path):
         # Load pre-processed mesh data
@@ -480,7 +449,6 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
         faces_list = []
         for I in range(n):
             # Compute bounding box for the current shape
-            b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[visualize_index])
             # print("\n")
             # print(f"Shape {visualize_index + 1}")
             # print(f"b_min = {b_min}\nb_max = {b_max}")
@@ -490,13 +458,17 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
             # print("")
             # print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
             # print(f"sdf_grid = {sdf_grid}\n")
+            print(f"{I}: sdf_min={ sdf_grid.flatten().min()}, sdf_max={ sdf_grid.flatten().max()}")
 
             # Recreate the mesh for the current shape
-            verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
+            try:
+                verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
+            except:
+                print(f"{I}: Couldn't recreate mesh")
+                continue
 
             # print(f"np.shape(verts) = {np.shape(verts)}")
             # print(f"np.shape(faces) = {np.shape(faces)}")
-            print(f"a = {vertices_tensor[I][0][0]}")
             verts_list.append(verts)
             faces_list.append(faces)
 

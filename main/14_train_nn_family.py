@@ -38,17 +38,17 @@ START_SDF_CALCULATOR_LR = 0.01
 REACTIVE_SDF_LR_VALUE = 0.01
 EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 2  # When the scheduling for time starts
 
-EPOCH_SHUFFLING_START = 4  # When we start shuffling the time index rather then doing it /\/\/\
+EPOCH_SHUFFLING_START = 6  # When we start shuffling the time index rather then doing it /\/\/\
 EPOCH_SCHEDULER_CHANGE = 20  # When we start stepping the scheduler with the avg validation loss
-EPOCH_WHERE_DROP_MESH_LR = [30]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
+EPOCH_WHERE_DROP_MESH_LR = [12]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
 
 # Learning rate of the different scheduling strategy
-TIME_PATIENCE = 10
+TIME_PATIENCE = 30
 EPOCH_PATIENCE = 2
-TIME_FACTOR = 0.9
-EPOCH_FACTOR = 0.6
+TIME_FACTOR = 0.92
+EPOCH_FACTOR = 0.75
 
-EPOCH_WHERE_SAVE_ALL = 60  # the epochs where we save the weights after every run
+EPOCH_WHERE_SAVE_ALL = 50  # the epochs where we save the weights after every run
 
 
 NUMBER_EPOCHS = 1000  # Total number of epochs
@@ -58,16 +58,16 @@ NUMBER_EPOCHS = 1000  # Total number of epochs
 class Param(Enum):
     MeshEncoder = 0
     SDFCalculator = 1
-    Both = 2
-    Neither = 3
+    Neither = 2
+    Both = 3
 
     # Define focus lengths for each learning mode
 
 
 FOCUS_LENGTHS = {
-    Param.Both: 5,  # Focus length for Both
-    Param.MeshEncoder: 10,  # Focus length for MeshEncoder
-    Param.SDFCalculator: 8,  # Focus length for SDFCalculator
+    Param.Both: 3,  # Focus length for Both
+    Param.MeshEncoder: 5,  # Focus length for MeshEncoder
+    Param.SDFCalculator: 6,  # Focus length for SDFCalculator
 }
 CYCLE_ORDER = [Param.Both, Param.MeshEncoder, Param.SDFCalculator]  # Dynamic focus cycle order
 
@@ -123,14 +123,19 @@ EPOCH_LEARN_BOTH = focus_switch_points[Param.Both]
 EPOCH_LEARN_MESH_ENCODER = focus_switch_points[Param.MeshEncoder]
 EPOCH_LEARN_SDF_CALCULATOR = focus_switch_points[Param.SDFCalculator]
 
-# Print arrays for verification
-print("EPOCH_LEARN_MESH_ENCODER:", EPOCH_LEARN_MESH_ENCODER)
-print("EPOCH_LEARN_SDF_CALCULATOR:", EPOCH_LEARN_SDF_CALCULATOR)
-print("EPOCH_LEARN_BOTH:", EPOCH_LEARN_BOTH)
+
+# Loop through CYCLE_ORDER and print arrays in the specified order
+for param in CYCLE_ORDER:
+    if param == Param.Both:
+        print(f"EPOCH_LEARN_BOTH = {EPOCH_LEARN_BOTH}")
+    elif param == Param.MeshEncoder:
+        print(f"EPOCH_LEARN_MESH_ENCODER = {EPOCH_LEARN_MESH_ENCODER}")
+    elif param == Param.SDFCalculator:
+        print(f"EPOCH_LEARN_SDF_CALCULATOR = {EPOCH_LEARN_SDF_CALCULATOR}")
 
 
 # Example usage of get_previous_focus
-current_focus = Param.Both
+current_focus = Param.SDFCalculator
 previous_focus = get_previous_focus(CYCLE_ORDER, current_focus)
 print(f"The step before {current_focus.name} is {previous_focus.name}.")
 
@@ -256,6 +261,14 @@ def read_pickle(directory, filename, finger_index, validate=False):
     with open(long_file_name, "rb") as file:
         output = pickle.load(file)
         print(f"Loaded {type(output)} from {long_file_name}")
+
+    return output
+
+
+def load_pickle(path: str):
+    with open(path, "rb") as file:
+        output = pickle.load(file)
+        print(f"Loaded {type(output)} from {path}")
 
     return output
 
@@ -408,7 +421,7 @@ class CustomLRScheduler:
         """Get the current learning rates for all parameter groups."""
         return [param_group["lr"] for param_group in self.optimizer.param_groups]
 
-    def step(self, validation_loss, target=Param.Both, saving_factor: float = 2.0):
+    def step(self, validation_loss, target=Param.Both, saving_factor: float = 2.0, epoch=0):
         """
         Update learning rates based on validation loss.
 
@@ -433,6 +446,9 @@ class CustomLRScheduler:
             self.steps_since_improvement += 1
             self.errors_since_saving += 1
             validation_not_improved = True
+
+        if validation_loss >= self.best_loss * 2 and epoch > 3:
+            send_notification_to_my_phone("Machine Learning", "We lost it")
 
         # Reduce learning rates for the specified parameter group(s)
         if self.steps_since_improvement >= self.patience:
@@ -536,6 +552,9 @@ class TrainingContext:
         self.loss_tracker: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
         self.loss_tracker_validate: list[np.ndarray] = [np.zeros(number_shape_per_familly)]
 
+        self.previous_mesh_encoder_lr = encoder_lr
+        self.previous_sdf_calculator_lr = sdf_calculator_lr
+
     def get_learning_rates(self):
         """
         Retrieve the current learning rates for the encoder and SDF calculator.
@@ -567,21 +586,23 @@ class TrainingContext:
         encoder_weights_path = get_path("encoder", epoch_index, time_index, self.finger_index)
         calculator_weights_path = get_path("sdf_calculator", epoch_index, time_index, self.finger_index)
         optimizer_state_path = get_path("optimizer", epoch_index, time_index, self.finger_index)
-        scheduler_state_path = get_path("scheduler", epoch_index, time_index, self.finger_index)
-        loss_tracker_path = get_path("loss_tracker", epoch_index, time_index, self.finger_index, extension="pkl")
-        loss_tracker_validate_path = get_path("loss_tracker_validate", epoch_index, time_index, self.finger_index, extension="pkl")
 
         load_dict_from_path(self.mesh_encoder, encoder_weights_path)
         load_dict_from_path(self.sdf_calculator, calculator_weights_path)
         load_dict_from_path(self.optimizer, optimizer_state_path)
 
-        with open(scheduler_state_path, "rb") as file:
-            self.scheduler = pickle.load(file)
+        loss_tracker_path = get_path("loss_tracker", epoch_index, time_index, self.finger_index, extension="pkl")
+        loss_tracker_validate_path = get_path("loss_tracker_validate", epoch_index, time_index, self.finger_index, extension="pkl")
+        self.loss_tracker_validate = load_pickle(loss_tracker_validate_path)
+        self.loss_tracker = load_pickle(loss_tracker_path)
 
-        with open(loss_tracker_path, "rb") as file:
-            self.loss_tracker = pickle.load(file)
-        with open(loss_tracker_validate_path, "rb") as file:
-            self.loss_tracker_validate = pickle.load(file)
+        scheduler_state_path = get_path("scheduler", epoch_index, time_index, self.finger_index)
+        self.scheduler = load_pickle(scheduler_state_path)
+
+        previous_mesh_encoder_lr_path = get_path("previous_mesh_encoder_lr", epoch_index, time_index, self.finger_index)
+        previous_sdf_calculator_lr_path = get_path("previous_sdf_calculator_lr", epoch_index, time_index, self.finger_index)
+        self.previous_mesh_encoder_lr = load_pickle(previous_mesh_encoder_lr_path)
+        self.previous_sdf_calculator_lr = load_pickle(previous_sdf_calculator_lr_path)
 
     def save_model_weights(self, mode: SaveMode):
 
@@ -662,6 +683,11 @@ class TrainingContext:
         save_pickle(scheduler_state_path, scheduler_state)
         save_pickle(loss_tracker_path, loss_tracker)
         save_pickle(loss_tracker_validate_path, loss_tracker_validate)
+
+        previous_mesh_encoder_lr_path = get_path("previous_mesh_encoder_lr", epoch_index, time_index, self.finger_index)
+        previous_sdf_calculator_lr_path = get_path("previous_sdf_calculator_lr", epoch_index, time_index, self.finger_index)
+        save_pickle(previous_mesh_encoder_lr_path, self.previous_mesh_encoder_lr)
+        save_pickle(previous_sdf_calculator_lr_path, self.previous_sdf_calculator_lr)
 
         print(f"Saved encoder weights to {encoder_weights_path}")
         print(f"Saved SDF calculator weights to {calculator_weights_path}")
@@ -804,6 +830,8 @@ def train_model(
 
     print("\n-------Start of Training----------\n")
 
+    training_context.previous_mesh_encoder_lr, training_context.previous_sdf_calculator_lr = training_context.get_learning_rates()
+
     # Training loop
     for epoch in range(start_epoch, epochs):
         print(f"\nstart of epoch {epoch}")
@@ -830,36 +858,57 @@ def train_model(
             print("________________________DROPPING MESH ENCONDER LEARNING RATE TO SDF CALCULATOR LEARNING RATE________________________")
             _, sdf_calculator_lr = training_context.get_learning_rates()
             if sdf_calculator_lr == 0:
-                sdf_calculator_lr = previous_sdf_calculator_lr
+                sdf_calculator_lr = training_context.previous_sdf_calculator_lr
                 print("------USING PREVIOUS SDF LR SINCE IT WAS 0 ------------")
             training_context.adjust_encoder_lr(sdf_calculator_lr)
 
         if epoch in EPOCH_LEARN_MESH_ENCODER:
-            print("________________________SETTING SDF CALCULATOR LEARNING RATE TO 0 TO LEARN THE MESH ENCODING________________________")
-            _, previous_sdf_calculator_lr = training_context.get_learning_rates()
-            training_context.adjust_encoder_lr(previous_mesh_encoder_lr)
+            print("|||||||\t\t________________________LEARNING THE MESH ENCODING________________________")
+            _, training_context.previous_sdf_calculator_lr = training_context.get_learning_rates()
+            print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
+            print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
+            if training_context.previous_sdf_calculator_lr == 0:
+                return Param.SDFCalculator.value
+            prev = get_previous_focus(CYCLE_ORDER, Param.MeshEncoder)
+            if prev == Param.SDFCalculator:
+                training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
             training_context.adjust_sdf_calculator_lr(0)
 
-        if epoch in EPOCH_LEARN_SDF_CALCULATOR:
-            print("________________________SETTING SDF CALCULATOR LEARNING RATE TO 0 TO LEARN THE MESH ENCODING________________________")
-            previous_mesh_encoder_lr, _ = training_context.get_learning_rates()
-            training_context.adjust_sdf_calculator_lr(previous_sdf_calculator_lr)
+        elif epoch in EPOCH_LEARN_SDF_CALCULATOR:
+            print("|||||||\t\t________________________LEARNING THE SDF CALCULATOR________________________")
+            training_context.previous_mesh_encoder_lr, _ = training_context.get_learning_rates()
+            print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
+            print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
+            if training_context.previous_mesh_encoder_lr == 0:
+                return Param.MeshEncoder.value
+            prev = get_previous_focus(CYCLE_ORDER, Param.SDFCalculator)
+            print(f"\n{prev.name}")
+            if prev == Param.MeshEncoder:
+                print("prev")
+                training_context.adjust_sdf_calculator_lr(training_context.previous_sdf_calculator_lr)
             training_context.adjust_encoder_lr(0)
 
-        if epoch == EPOCH_LEARN_BOTH:
-            print(
-                f"________________________SETTING SDF CALCULATOR LEARNING RATE TO {REACTIVE_SDF_LR_VALUE} TO DO MIXED LEARNING________________________"
-            )
+        elif epoch in EPOCH_LEARN_BOTH:
+            print(f"|||||||\t\t________________________LEARNING BOTH___________________________")
             prev = get_previous_focus(CYCLE_ORDER, Param.Both)
+            print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
+            print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
             if prev == Param.MeshEncoder:
-                training_context.adjust_encoder_lr(previous_mesh_encoder_lr)
+                print("\n\n\n\t\t-------THIS SHOULD NEVER HAPPEN______________________________-XXXXXXXX")
+                training_context.adjust_sdf_calculator_lr(training_context.previous_sdf_calculator_lr)
             if prev == Param.SDFCalculator:
-                training_context.adjust_sdf_calculator_lr(previous_sdf_calculator_lr)
+                training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
+        else:
+            pe, ps = training_context.get_learning_rates()
+            if pe != 0:
+                training_context.previous_mesh_encoder_lr = pe
+            if ps != 0:
+                training_context.previous_sdf_calculator_lr = ps
 
         current_lr = training_context.scheduler.get_last_lr()
         print(f"current lr = {current_lr}")
         if current_lr[0] == 0 and current_lr[1] == 0:
-            return 2
+            return Param.Both.value
 
         # ------------------------------------------------------------------------------------------ FOR LOOP ---------------------------------------------------------------------
         all_latent_vector = []
@@ -895,11 +944,11 @@ def train_model(
             if epoch < EPOCH_SCHEDULER_CHANGE:
                 if epoch < EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING:
                     validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
-                        loss_validate, Param.Neither, saving_factor=1.4
+                        loss_validate, Param.Neither, saving_factor=1.4, epoch=epoch
                     )
                 else:
                     validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
-                        loss_validate, Param.Both, saving_factor=1.4
+                        loss_validate, Param.Both, saving_factor=1.4, epoch=epoch
                     )
                 training_not_upgrade = training_context.dummy_scheduler.step(loss_training)
 
@@ -947,7 +996,9 @@ def train_model(
             training_context.dummy_scheduler.set_min_loss(avg_tl)
 
         if epoch >= EPOCH_SCHEDULER_CHANGE:
-            validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(avg_vl, Param.Both, saving_factor=2.0)
+            validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
+                avg_vl, Param.Both, saving_factor=2.0, epoch=epoch
+            )
             training_not_upgrade = training_context.dummy_scheduler.step(avg_tl)
 
             upgrade_message = get_upgrade_message(validation_not_upgrade, training_not_upgrade)
@@ -1071,14 +1122,23 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
             start_epoch=epoch_index or 0,
             start_time=time_index or 0,
         )
-        if ret == 2:
-            send_notification_to_my_phone("Machine Learning", "All weights zero")
-        else:
-            send_notification_to_my_phone("Machine Learning", "End of training, come back")
+        if ret == Param.Neither.value:
+            send_notification_to_my_phone("Machine Learning", "It worked, End of training, come back")
+        elif ret == Param.Both.value:
+            send_notification_to_my_phone("Machine Learning", "All weights zeo")
+        elif ret == Param.MeshEncoder.value:
+            send_notification_to_my_phone("Machine Learning", "Previous Mesh Encoder 0")
+        elif ret == Param.SDFCalculator.value:
+            send_notification_to_my_phone("Machine Learning", "Previous Mesh Encoder 0")
         return ret
-    except:
+
+    except Exception as e:
+        import traceback
+
+        error_message = f"Training crashed with error: {str(e)}\n{traceback.format_exc()}"
+        print(error_message)  # Optional: Log to the console
         send_notification_to_my_phone("Machine Learning", "Training crashed, come back")
-        return 1
+        return 10
 
 
 if __name__ == "__main__":
@@ -1138,4 +1198,12 @@ if __name__ == "__main__":
 
     # Call main and exit with the returned code
     ret = main(args.start_from_zero, args.continue_training, epoch_index, time_index, finger_index)
-    exit(ret)
+    """ Bellow is to:  Returns 0 if succeed, 1 if mesh_encoder_lr=0, 2 if sdf_calculator_lr = 0, 3 if both is"""
+    """ Case 3 should not happen because its caught one cycle element in advance by 1 and 2. 1 and 2 is if we have 0 x and we save previous y to 0, well have prev_x = prev_y = 0"""
+    """ where x and y are the sdf_calculator_lr and mesh_encoder_lr"""
+    exit_map = [1, 2, 0, 3]
+    # Ensure ret is within range
+    if ret >= 0 and ret < len(exit_map):
+        exit(exit_map[ret])  # Exit using the mapped value
+    else:
+        exit(ret)  # Exit using the original value if out of range
