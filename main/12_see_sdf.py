@@ -11,6 +11,7 @@ import sys
 import igl
 from dolfinx import mesh
 from typing import Tuple
+import pickle
 
 os.chdir(sys.path[0])
 
@@ -19,6 +20,17 @@ DISPLACEMENT_DIRECTORY = "./deformed_bunny_files_tunned"
 BUNNY_FILE = "bunny.xdmf"
 SDF_DIRECTORY = "./calculated_sdf_tunned"
 POINTS_TO_TAKE_SDF_FILE = "points_to_take_sdf.npy"
+LOAD_DIR = "./training_data"
+
+
+def read_pickle(directory, filename, finger_index, validate=False):
+    long_file_name = f"{directory}/{filename}_{finger_index}{'_validate' if validate else ''}.pkl"
+
+    with open(long_file_name, "rb") as file:
+        output = pickle.load(file)
+        print(f"Loaded {type(output)} from {long_file_name}")
+
+    return output
 
 
 def load_sdf_data(displacement_index, time_index, sdf_only):
@@ -354,7 +366,9 @@ def main(finger_index, time_index, sdf_only):
     print(f"vertices_array = \n{vertices_array}\n")
     faces = faces_array[0]
 
-    points, sdf = load_sdf_data(finger_index, time_index, sdf_only)
+    points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[time_index]
+    sdf = read_pickle(LOAD_DIR, "sdf_values", finger_index)[time_index]
+
     print(f"np.shape(points) = {np.shape(points)}")
     print(f"points = \n{points}\n")
 

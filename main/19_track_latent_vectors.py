@@ -175,7 +175,7 @@ def main(finger_index=DEFAULT_FINGER_INDEX):
         rel_changes_all_epochs.append(change_rel_order)
 
         # Plot latent vector statistics for the current epoch
-        # plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order, epoch_index)
+        plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order, epoch_index)
 
     plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords=20, epochs=epoch_list)
 

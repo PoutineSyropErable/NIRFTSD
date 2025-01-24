@@ -12,6 +12,7 @@ import argparse
 import os
 import signal
 import time
+from datetime import datetime, timedelta
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,14 +34,14 @@ DEFAULT_FINGER_INDEX = 730
 
 # ------------------ Start of Hyper Parameters
 LATENT_DIM = 128
-START_ENCODER_LR = 0.05
-START_SDF_CALCULATOR_LR = 0.01
-REACTIVE_SDF_LR_VALUE = 0.01
-EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 2  # When the scheduling for time starts
+START_ENCODER_LR = 0.0075
+START_SDF_CALCULATOR_LR = 0.005
+EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 3  # When the scheduling for time starts
 
 EPOCH_SHUFFLING_START = 6  # When we start shuffling the time index rather then doing it /\/\/\
 EPOCH_SCHEDULER_CHANGE = 20  # When we start stepping the scheduler with the avg validation loss
-EPOCH_WHERE_DROP_MESH_LR = [12]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
+EPOCH_WHERE_DROP_MESH_LR = [-1]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
+EPOCH_WHERE_RESET_MIN_LOSS = [2, 3, 4]
 
 # Learning rate of the different scheduling strategy
 TIME_PATIENCE = 30
@@ -65,11 +66,12 @@ class Param(Enum):
 
 
 FOCUS_LENGTHS = {
-    Param.Both: 3,  # Focus length for Both
+    Param.Both: 7,  # Focus length for Both
     Param.MeshEncoder: 5,  # Focus length for MeshEncoder
-    Param.SDFCalculator: 6,  # Focus length for SDFCalculator
+    Param.SDFCalculator: 12,  # Focus length for SDFCalculator
 }
 CYCLE_ORDER = [Param.Both, Param.MeshEncoder, Param.SDFCalculator]  # Dynamic focus cycle order
+MESH_ONLY_LR_DIVIDE = 3.5
 
 
 def get_previous_focus(cycle_order, current_focus):
@@ -378,6 +380,7 @@ class CustomLRScheduler:
         self.errors_since_saving = 0
         self.best_loss = float("inf")
         self.verbose = verbose
+        self.last_execution_time = datetime.min  # Set to a very old time initially
 
     def set_patience_and_factor(self, patience, factor):
         """
@@ -436,6 +439,12 @@ class CustomLRScheduler:
         if validation_loss is None:
             raise ValueError("Validation loss must be provided for the scheduler to operate.")
 
+        validation_ratio = np.sqrt(validation_loss) / dL2
+
+        if epoch > EPOCH_SCHEDULER_CHANGE:
+            if np.abs(validation_ratio - 0.2) <= 0.02:
+                send_notification_to_my_phone("Machine Learning", f"Epoch = {epoch}. Val ratio={validation_ratio}")
+
         # Check for improvement
         if validation_loss < self.best_loss:
             self.best_loss = validation_loss
@@ -448,7 +457,19 @@ class CustomLRScheduler:
             validation_not_improved = True
 
         if validation_loss >= self.best_loss * 2 and epoch > 3:
-            send_notification_to_my_phone("Machine Learning", "We lost it")
+            self.last_sent = time.time.now()
+            # Get the current time
+            now = datetime.now()
+
+            # Check if at least 1 minute has passed
+            if now - self.last_execution_time >= timedelta(minutes=1):
+                # Update last execution time
+                self.last_execution_time = now
+                validation_distance = np.sqrt(validation_loss)
+                val_ratio = validation_distance / dL2
+                send_notification_to_my_phone(
+                    "Machine Learning", f"We lost it\nEpoch: {epoch}. Valdation loss: {validation_loss}, Validation Ratio: {val_ratio} "
+                )
 
         # Reduce learning rates for the specified parameter group(s)
         if self.steps_since_improvement >= self.patience:
@@ -806,6 +827,7 @@ def train_model(
     """
     global stop_time_signal, stop_epoch_signal
     global dL2
+    global MESH_ONLY_LR_DIVIDE
 
     # Convert inputs to PyTorch tensors
     vertices_tensor = torch.tensor(vertices_tensor, dtype=torch.float32)
@@ -863,15 +885,20 @@ def train_model(
             training_context.adjust_encoder_lr(sdf_calculator_lr)
 
         if epoch in EPOCH_LEARN_MESH_ENCODER:
-            print("|||||||\t\t________________________LEARNING THE MESH ENCODING________________________")
+            print("|||||||\t\t________________________LEARNING THE MESH ENCODING________________________ Taking sdf_lr/5")
             _, training_context.previous_sdf_calculator_lr = training_context.get_learning_rates()
             print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
             print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
             if training_context.previous_sdf_calculator_lr == 0:
                 return Param.SDFCalculator.value
+
             prev = get_previous_focus(CYCLE_ORDER, Param.MeshEncoder)
-            if prev == Param.SDFCalculator:
-                training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
+            if prev == Param.Both:
+                chosen_lr = min(training_context.previous_mesh_encoder_lr, training_context.previous_sdf_calculator_lr)
+                training_context.adjust_encoder_lr(chosen_lr / MESH_ONLY_LR_DIVIDE)
+                MESH_ONLY_LR_DIVIDE = max(MESH_ONLY_LR_DIVIDE - 0.5, 1)
+            else:
+                print("\n\n\n\nThis should never happen\n\n\n\n")
             training_context.adjust_sdf_calculator_lr(0)
 
         elif epoch in EPOCH_LEARN_SDF_CALCULATOR:
@@ -904,6 +931,17 @@ def train_model(
                 training_context.previous_mesh_encoder_lr = pe
             if ps != 0:
                 training_context.previous_sdf_calculator_lr = ps
+
+        if epoch in EPOCH_WHERE_RESET_MIN_LOSS:
+            print("\t\t\t\t___-----_____----changing min loss")
+            training_context.scheduler.set_min_loss(loss_validate)
+            training_context.dummy_scheduler.set_min_loss(loss_training)
+
+        if epoch == 3:
+            print("----HALVING LEARNING RATE--------")
+            pe, ps = training_context.get_learning_rates()
+            training_context.scheduler.set_encoder_lr(pe / 1.5)
+            training_context.scheduler.set_sdf_calculator_lr(pe / 1.5)
 
         current_lr = training_context.scheduler.get_last_lr()
         print(f"current lr = {current_lr}")
