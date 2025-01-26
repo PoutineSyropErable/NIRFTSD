@@ -59,11 +59,18 @@ def compute_latent_vector_stats(mesh_encoder, vertices_tensor):
         vertices = vertices_tensor[i].view(1, -1)  # Flatten vertices
         latent_vector = mesh_encoder(vertices)  # Extract latent vector
         latent_vector_np = latent_vector.detach().cpu().numpy().flatten()
+        print(f"{i}: latent_vector_np = {latent_vector_np}")
         latent_vector_list.append(latent_vector_np)
 
     latent_vectors = np.array(latent_vector_list).T  # Transpose for easier computation
+    print(f"np.shape(latent_vectors) = {np.shape(latent_vectors)}")
+    print(f"latent_vectors = \n{latent_vectors}")
     stdl = np.std(latent_vectors, axis=1)  # Standard deviation of each coordinate
     meanl = np.mean(latent_vectors, axis=1)  # Mean of each coordinate
+
+    print("\n")
+    print(f"stdl = {stdl}")
+    print(f"np.shape(stdl) = {np.shape(stdl)}")
 
     change_rel = stdl / np.abs(meanl)  # Compute relative change (std / mean)
     change_rel[np.isnan(change_rel)] = 0  # Handle division by zero if mean is zero
@@ -71,6 +78,7 @@ def compute_latent_vector_stats(mesh_encoder, vertices_tensor):
     order = np.argsort(change_rel)[::-1]  # Descending order
     change_rel_order = change_rel[order]
 
+    print("\n")
     return latent_vectors, order, change_rel, change_rel_order
 
 
@@ -160,7 +168,8 @@ def main(finger_index=DEFAULT_FINGER_INDEX):
 
     rel_changes_all_epochs = []
     # Iterate through 13 epochs
-    epoch_list = list(range(1, 13))
+    max_epoch = 10
+    epoch_list = list(range(1, max_epoch))
     for epoch_index in epoch_list:
         print(f"\nProcessing Epoch {epoch_index}...\n")
 
@@ -168,14 +177,14 @@ def main(finger_index=DEFAULT_FINGER_INDEX):
         training_context.load_model_weights(epoch_index, time_index=0)
 
         # Compute latent vector statistics
-        latent_vectors, order, change_rel, change_rel_order = compute_latent_vector_stats(mesh_encoder, vertices_tensor)
+        latent_vectors, order, change_rel, change_rel_ordered = compute_latent_vector_stats(training_context.mesh_encoder, vertices_tensor)
         mean_rel_change.append(np.mean(change_rel))
-        max_rel_change.append(change_rel_order[0])
+        max_rel_change.append(change_rel_ordered[0])
 
-        rel_changes_all_epochs.append(change_rel_order)
+        rel_changes_all_epochs.append(change_rel_ordered)
 
         # Plot latent vector statistics for the current epoch
-        plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order, epoch_index)
+        # plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order, epoch_index)
 
     plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords=20, epochs=epoch_list)
 

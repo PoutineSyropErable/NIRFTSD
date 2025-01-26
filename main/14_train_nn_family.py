@@ -1,10 +1,7 @@
 """
 To do: 
-1. Make the cycle length different using different parameters
-2. In 'learn both' epoch switch, using order, set the correct learning rate to what they were. 
-3. Create an array start and end to create a list of ranges. Within those rabge, backstep using total_loss + alpha* latent encoder validation. 
-4. Create an alpha of epoch equation, and set the Hyper parameters for it
-5. Make it so during latent regularization epoch, the learning rate is much slower. Like 10 times smaller
+6. Be able to restart with a fresh optimiser, and scheduler, in the stage I want
+And at the end, once the average bunny is found, restart from there with mesh learning rate higher
 """
 
 import pickle
@@ -457,7 +454,6 @@ class CustomLRScheduler:
             validation_not_improved = True
 
         if validation_loss >= self.best_loss * 2 and epoch > 3:
-            self.last_sent = time.time.now()
             # Get the current time
             now = datetime.now()
 
@@ -894,9 +890,13 @@ def train_model(
 
             prev = get_previous_focus(CYCLE_ORDER, Param.MeshEncoder)
             if prev == Param.Both:
-                chosen_lr = min(training_context.previous_mesh_encoder_lr, training_context.previous_sdf_calculator_lr)
-                training_context.adjust_encoder_lr(chosen_lr / MESH_ONLY_LR_DIVIDE)
-                MESH_ONLY_LR_DIVIDE = max(MESH_ONLY_LR_DIVIDE - 0.5, 1)
+                if False:
+                    chosen_lr = min(training_context.previous_mesh_encoder_lr, training_context.previous_sdf_calculator_lr)
+                    training_context.adjust_encoder_lr(chosen_lr / MESH_ONLY_LR_DIVIDE)
+                    MESH_ONLY_LR_DIVIDE = max(MESH_ONLY_LR_DIVIDE - 0.5, 1)
+                else:
+
+                    training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
             else:
                 print("\n\n\n\nThis should never happen\n\n\n\n")
             training_context.adjust_sdf_calculator_lr(0)
@@ -937,7 +937,7 @@ def train_model(
             training_context.scheduler.set_min_loss(loss_validate)
             training_context.dummy_scheduler.set_min_loss(loss_training)
 
-        if epoch == 3:
+        if epoch == 3 and False:
             print("----HALVING LEARNING RATE--------")
             pe, ps = training_context.get_learning_rates()
             training_context.scheduler.set_encoder_lr(pe / 1.5)

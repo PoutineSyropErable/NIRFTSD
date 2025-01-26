@@ -453,104 +453,44 @@ def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visua
 
     b_min, b_max = find_global_bounding_box(vertices_tensor_np)
     query_points = create_3d_points_within_bbox(b_min, b_max, GRID_DIM)
-    # File containing finger_positions (after filtering)
     FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
     finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
-    # Swap Y and Z because poylscope uses weird data
-    # finger_positions[:, [1, 2]] = finger_positions[:, [2, 1]]
     finger_position = finger_positions[finger_index]
     R = 0.003  # Radius of the FINGER
-    if False:
-        # b_min, b_max = compute_enlarged_bounding_box(vertices_tensor_np[visualize_index])
-        print("\n")
-        print(f"b_min = {b_min}\nb_max = {b_max}")
-
-        print(f"np.shape(query_points) = {np.shape(query_points)}")
-        print(f"query_points = \n{query_points}")
-        print("")
-        sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, visualize_index, query_points)
-        print("")
-        print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
-        print(f"sdf_grid = {sdf_grid}\n")
-        print(f"{visualize_index}: sdf_min = { sdf_grid.flatten().min()}, sdf_max = { sdf_grid.flatten().max()}")
-        print("")
-
-        # visualize_sdf_points(query_points, sdf_grid)
-        orig_faces, orig_verts = faces_np, vertices_tensor_np[visualize_index]
-
-        print(f"np.shape(orig_faces) = {np.shape(orig_faces)}")
-        print(f"np.shape(orig_verts) = {np.shape(orig_verts)}")
-        visualize_mesh_and_points(orig_faces, orig_verts, b_min, b_max, query_points)
-
-        verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
-
-        print(f"np.shape(verts) = {np.shape(verts)}")
-        print(f"np.shape(faces) = {np.shape(faces)}")
-        print(f"faces = {faces}")
-        print(f"verts = {verts}")
-        visualize_mesh_old(verts, faces, finger_position, R)
-        # visualize_mesh(verts, faces, finger_position, R)
-
-    verts_list_path = "verts_list.pkl"
-    faces_list_path = "faces_list.pkl"
 
     b_min, b_max = find_global_bounding_box(vertices_tensor_np)
+    # Compute bounding box for the current shape
+    print(f"\nb_min = {b_min}\nb_max = {b_max}\n")
 
-    if os.path.exists(verts_list_path) and os.path.exists(faces_list_path):
-        os.remove(verts_list_path)
-        os.remove(faces_list_path)
-    n = 100
-    if os.path.exists(verts_list_path) and os.path.exists(faces_list_path):
-        # Load pre-processed mesh data
-        verts_list = load_pickle(verts_list_path)
-        faces_list = load_pickle(faces_list_path)
-        time_index_animation = 0
-        for verts, faces in zip(verts_list, faces_list):
-            # print(f"np.shape(verts) = {np.shape(verts)}")
-            # print(f"np.shape(faces) = {np.shape(faces)}")
-            print(f"a = {vertices_tensor[time_index_animation][0][0]}")
-            time_index_animation += 1
-            pass
-    else:
-        verts_list = []
-        faces_list = []
-        for time_index_animation in range(n):
-            # Compute bounding box for the current shape
-            # print("\n")
-            # print(f"Shape {visualize_index + 1}")
-            # print(f"b_min = {b_min}\nb_max = {b_max}")
+    verts_list = []
+    faces_list = []
+    for time_index_animation in range(len(vertices_tensor_np)):
+        sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_index_animation, query_points)
+        # print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
+        # print(f"sdf_grid = {sdf_grid}\n")
+        print(f"{time_index_animation}: sdf_min={ sdf_grid.flatten().min()}, sdf_max={ sdf_grid.flatten().max()}")
 
-            sdf_grid = calculate_sdf_at_points(mesh_encoder, sdf_calculator, vertices_tensor, time_index_animation, query_points)
-            # print("")
-            # print(f"np.shape(sdf_grid) = {np.shape(sdf_grid)}")
-            # print(f"sdf_grid = {sdf_grid}\n")
-            print(f"{time_index_animation}: sdf_min={ sdf_grid.flatten().min()}, sdf_max={ sdf_grid.flatten().max()}")
+        try:
+            verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
+            print(f"Recreated mesh {time_index_animation}")
+        except:
+            print(f"{time_index_animation}: Couldn't recreate mesh")
+            continue
 
-            # Recreate the mesh for the current shape
-            try:
-                verts, faces = recreate_mesh(sdf_grid, GRID_DIM, b_min, b_max)
-            except:
-                print(f"{time_index_animation}: Couldn't recreate mesh")
-                continue
-
-            # print(f"np.shape(verts) = {np.shape(verts)}")
-            # print(f"np.shape(faces) = {np.shape(faces)}")
-            verts_list.append(verts)
-            faces_list.append(faces)
-
-    # Visualize the current shape
-    save_pickle(verts_list_path, verts_list)
-    save_pickle(faces_list_path, faces_list)
-
-    mesh_list = []
-    for verts, faces in zip(verts_list, faces_list):
         # print(f"np.shape(verts) = {np.shape(verts)}")
         # print(f"np.shape(faces) = {np.shape(faces)}")
+        verts_list.append(verts)
+        faces_list.append(faces)
+
+    print(f"\nCreating the Mesh list")
+    mesh_list = []
+    for verts, faces in zip(verts_list, faces_list):
+        print(f"np.shape(verts) = {np.shape(verts)}")
+        print(f"np.shape(faces) = {np.shape(faces)}")
         pyvista_faces = np.hstack([np.full((faces.shape[0], 1), 3), faces]).flatten()
         mesh = pv.PolyData(verts, pyvista_faces)
         mesh_list.append(mesh)
 
-    save_pickle("mesh_list.pkl", mesh_list)
     visualize_mesh_list(mesh_list, finger_position, R)
 
     return 0
