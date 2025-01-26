@@ -412,7 +412,7 @@ def visualize_mesh_list(mesh_list, finger_position, R, validate=False, offscreen
         print(f"  Focal Point: {focal_point}")
         print(f"  View Up: {view_up}")
         print()
-        # key = input("Press something to continue to next frame").strip().lower()
+        key = input("Press something to continue to next frame").strip().lower()
 
     # Close the plotter and save the movie
     plotter.close()

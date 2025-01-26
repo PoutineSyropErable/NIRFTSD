@@ -14,6 +14,7 @@ from typing import Optional
 import matplotlib.pyplot as plt
 from enum import Enum
 from __TRAINING_FILE import MeshEncoder, SDFCalculator, TrainingContext, LATENT_DIM, DEFAULT_FINGER_INDEX, NEURAL_WEIGHTS_DIR, LOAD_DIR
+from __TRAINING_FILE import CustomLRScheduler
 
 
 def read_pickle(directory, filename, finger_index, validate=False):
@@ -28,7 +29,7 @@ def read_pickle(directory, filename, finger_index, validate=False):
 
 def main():
     finger_index = 730
-    epoch_index = 339
+    epoch_index = 592
     time_index = 0
     vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
@@ -50,6 +51,9 @@ def main():
     losses = training_context.loss_tracker_validate
     loss_mean = [np.mean(loss) for loss in losses]
     loss_max = [np.max(loss) for loss in losses]
+
+    loss_mean = loss_mean[:-1]
+    loss_max = loss_max[:-1]
 
     plt.figure()
     plt.title("mean and max loss over epochs")

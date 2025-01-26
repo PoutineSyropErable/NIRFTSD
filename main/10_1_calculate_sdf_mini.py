@@ -15,6 +15,9 @@ import polyscope as ps
 import inspect
 import pickle
 
+from __SDF_VIS import plot_histograms_with_function
+
+
 DEBUG_ = False
 DEBUG_TIMER = False
 os.chdir(sys.path[0])
@@ -568,6 +571,7 @@ def generate_and_save_sdf(
 
     b_min, b_max = b_min * BOX_RATIO, b_max * BOX_RATIO
     point_list = generate_sdf_points_from_boundary_points(NUM_POINTS, b_min, b_max, n=Z_EXPONENT, b=Z_OFFSET)
+    plot_histograms_with_function(point_list, b_min, b_max, Z_EXPONENT, Z_OFFSET)
 
     filtered_points_list = []
     filtered_sd_list = []
@@ -608,6 +612,8 @@ def generate_and_save_sdf(
     print(f"Saved filtered points to {points_file}")
     print(f"Saved filtered signed distances to {values_file}")
 
+    return filtered_points_list, filtered_sd_list
+
 
 def main():
     print(f"\n\n{'-'*10} Start of Program{'-'*10}\n\n")
@@ -646,7 +652,7 @@ def main():
     print(f"b_min: {b_min}")
     print(f"b_max: {b_max}")
 
-    generate_and_save_sdf(deformed_vertices_array, faces, INDEX, validate=False)
+    filtered_points_list, filtered_sd_list = generate_and_save_sdf(deformed_vertices_array, faces, INDEX, validate=False)
     generate_and_save_sdf(deformed_vertices_array, faces, INDEX, validate=True)
     # --- end of main------------------------------------------------------------------
 
