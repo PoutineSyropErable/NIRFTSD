@@ -118,7 +118,7 @@ def plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order
     plt.ylabel("Latent Value", fontsize=12)
     for i in range(5):
         plt.plot(latent_vectors[order[i]], label=f"Coord {order[i]}, Rel_Change: {change_rel_order[i]:.4f}")
-    plt.legend(loc="upper right")
+    # plt.legend(loc="upper right")
     plt.grid(True)
     plt.show()
 
@@ -141,7 +141,10 @@ def plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords, 
     colors = plt.cm.cool(np.linspace(0, 1, len(epochs)))  # Red-to-blue colormap
 
     for i, (change_rel_order, epoch) in enumerate(zip(rel_changes_all_epochs, epochs)):
-        plt.plot(change_rel_order[:num_coords], label=f"Epoch {epoch}", color=colors[i])
+        if i == 0 or i == epochs[-1]:
+            plt.plot(change_rel_order[:num_coords], label=f"Epoch {epoch}", color=colors[i])
+        else:
+            plt.plot(change_rel_order[:num_coords], color=colors[i])
 
     plt.grid(True)
     plt.legend(title="Epoch", loc="upper right", fontsize=10)
@@ -168,8 +171,11 @@ def main(finger_index=DEFAULT_FINGER_INDEX):
 
     rel_changes_all_epochs = []
     # Iterate through 13 epochs
-    max_epoch = 10
+    max_epoch = 50
     epoch_list = list(range(1, max_epoch))
+    # Add the sequence 12, 22, ..., 592
+    epoch_list.extend(range(52, 593, 10))
+
     for epoch_index in epoch_list:
         print(f"\nProcessing Epoch {epoch_index}...\n")
 

@@ -660,6 +660,7 @@ def plot_histograms_with_function(point_list, b_min, b_max, n, b):
     labels = ["x", "y", "z"]
     bounds = [(b_min[0], b_max[0]), (b_min[1], b_max[1]), (z_min, z_max)]
 
+    # fig.suptitle("Histograms of generated data coordinates: x, y, and z", fontsize=16)
     for i, ax in enumerate(axes):
         # Calculate the histogram for scaling
         hist, bin_edges = np.histogram(data[i], bins=50, range=bounds[i])
@@ -674,7 +675,7 @@ def plot_histograms_with_function(point_list, b_min, b_max, n, b):
             color="blue",
             label=f"Histogram of {labels[i]}",
         )
-        ax.set_title(f"{labels[i]} Histogram", fontsize=14)
+        # ax.set_title(f"{labels[i]} Histogram", fontsize=14, pad=15)
         ax.set_xlabel(labels[i], fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
 

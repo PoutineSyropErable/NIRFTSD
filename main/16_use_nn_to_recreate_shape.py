@@ -369,6 +369,13 @@ def visualize_mesh_list(mesh_list, finger_position, R, output_file="mesh_animati
     # Open the movie file for writing
     plotter.open_movie(output_file, framerate=20)
 
+    # Set the initial camera position, focal point, and view up
+    plotter.camera_position = [
+        (-0.20319936762932952, 0.23791062551755582, 0.38748501954049164),  # Camera position
+        (0.07723370113892855, 0.0004967873193695294, 0.06903945672066888),  # Focal point
+        (0.15444222902094137, -0.7220822613237896, 0.6743476890866948),  # View up
+    ]
+
     # Animate through all meshes in the list
     for i, mesh in enumerate(mesh_list):
         # Update the actor with the current mesh's geometry
