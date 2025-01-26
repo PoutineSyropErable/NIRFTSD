@@ -68,7 +68,7 @@ FOCUS_LENGTHS = {
     Param.SDFCalculator: 12,  # Focus length for SDFCalculator
 }
 CYCLE_ORDER = [Param.Both, Param.MeshEncoder, Param.SDFCalculator]  # Dynamic focus cycle order
-MESH_ONLY_LR_DIVIDE = 3.5
+MESH_ONLY_LR_DIVIDE = 3.5  # dont use that anymore since we dropped the learning rates
 
 
 def get_previous_focus(cycle_order, current_focus):

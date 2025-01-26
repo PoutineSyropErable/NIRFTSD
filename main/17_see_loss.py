@@ -28,7 +28,7 @@ def read_pickle(directory, filename, finger_index, validate=False):
 
 def main():
     finger_index = 730
-    epoch_index = 339
+    epoch_index = 592
     time_index = 0
     vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
