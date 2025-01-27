@@ -21,6 +21,18 @@ from enum import Enum
 
 from __send_notification_sl import main as send_notification_to_my_phone
 
+
+class SignalType(Enum):
+    TERMINATE_TIME = signal.SIGTERM
+    TERMINATE_EPOCH = signal.SIGINT
+    STOP_NEXT_TIME = signal.SIGUSR1
+    STOP_NEXT_EPOCH = signal.SIGUSR2
+    SAVE_LAST_TIME = signal.SIGRTMIN
+    SAVE_LAST_EPOCH = signal.SIGRTMIN + 1
+    SAVE_NEXT_TIME = signal.SIGRTMIN + 2
+    SAVE_NEXT_EPOCH = signal.SIGRTMIN + 3
+
+
 # Directory containing the pickle files
 LOAD_DIR = "./training_data"
 
@@ -171,7 +183,7 @@ def handle_stop_epoch_signal(signum, frame):
     print("Received stop epoch signal. Will stop after the current epoch iteration.")
 
 
-def handle_save_epoch_signal(signum, frame):
+def handle_save_last_epoch_signal(signum, frame):
     """
     Handle termination signals (SIGTERM, SIGINT).
     Save weights at the current epoch and time index before exiting.
@@ -181,7 +193,7 @@ def handle_save_epoch_signal(signum, frame):
     training_context.save_model_weights(SaveMode.NowEpoch)
 
 
-def handle_save_time_signal(signum, frame):
+def handle_save_last_time_signal(signum, frame):
     """
     Handle termination signals (SIGTERM, SIGINT).
     Save weights at the current epoch and time index before exiting.
@@ -189,6 +201,19 @@ def handle_save_time_signal(signum, frame):
     print("Received save previous time signal")
     global training_context
     training_context.save_model_weights(SaveMode.NowTime)
+
+
+# Signal handlers
+def handle_save_next_time_signal(signum, frame):
+    global save_next_time_signal
+    save_next_time_signal = True
+    print("Received save next time signal. Will save results after the current time iteration.")
+
+
+def handle_save_next_epoch_signal(signum, frame):
+    global save_next_epoch_signal
+    save_next_epoch_signal = True
+    print("Received save next epoch signal. Will save results after the current epoch iteration.")
 
 
 def handle_termination_time(signum, frame):
@@ -572,6 +597,21 @@ class TrainingContext:
         self.previous_mesh_encoder_lr = encoder_lr
         self.previous_sdf_calculator_lr = sdf_calculator_lr
 
+    def reset(self, mesh_encoder_lr: float = START_ENCODER_LR, sdf_calculator_lr: float = START_SDF_CALCULATOR_LR):
+
+        print(f"\n\n\t___---___reset\nmelr: {mesh_encoder_lr}, sclr: {sdf_calculator_lr}\n")
+        # Define separate parameter groups for the optimizer
+        self.optimizer: torch.optim.Optimizer = torch.optim.Adam(
+            [
+                {"params": self.mesh_encoder.parameters(), "lr": mesh_encoder_lr},
+                {"params": self.sdf_calculator.parameters(), "lr": sdf_calculator_lr},
+            ]
+        )
+        self.scheduler: CustomLRScheduler = CustomLRScheduler(self.optimizer, factor=TIME_FACTOR, patience=TIME_PATIENCE)
+        self.dummy_scheduler: DummyScheduler = DummyScheduler()  # only for training improvement tracking
+        self.previous_mesh_encoder_lr = mesh_encoder_lr
+        self.previous_sdf_calculator_lr = sdf_calculator_lr
+
     def get_learning_rates(self):
         """
         Retrieve the current learning rates for the encoder and SDF calculator.
@@ -806,6 +846,7 @@ def train_model(
     epochs=1000,
     start_epoch=0,
     start_time=0,
+    reset: bool = False,
 ):
     """
     Train the mesh encoder and SDF calculator sequentially over time steps.
@@ -822,6 +863,7 @@ def train_model(
         start_time (int): Time index to start training from.
     """
     global stop_time_signal, stop_epoch_signal
+    global save_next_time_signal, save_next_epoch_signal
     global dL2
     global MESH_ONLY_LR_DIVIDE
 
@@ -838,11 +880,12 @@ def train_model(
 
     criterion = nn.MSELoss()
 
-    min_training_loss, min_validate_loss = get_previous_min(training_context, start_epoch)
-    training_context.scheduler.set_min_loss(min_validate_loss)
-    training_context.dummy_scheduler.set_min_loss(min_training_loss)
+    if not reset:
+        min_training_loss, min_validate_loss = get_previous_min(training_context, start_epoch)
+        training_context.scheduler.set_min_loss(min_validate_loss)
+        training_context.dummy_scheduler.set_min_loss(min_training_loss)
 
-    print(f"\nPrevious mins: {min_training_loss}, {min_validate_loss}\n")
+        print(f"\nPrevious mins: {min_training_loss}, {min_validate_loss}\n")
 
     training_context.save_model_weights(SaveMode.NowEpoch)
 
@@ -1013,9 +1056,12 @@ def train_model(
             training_context.time_update(t_index)
 
             # Handle stop time signal
-            if stop_time_signal:
-                print(f"Stopping after time iteration {i + 1}/{vertices_tensor.shape[0]}.")
+            if stop_time_signal or save_next_time_signal:
+                print(f"Saving after time iteration {i + 1}/{vertices_tensor.shape[0]}.")
                 training_context.save_model_weights(SaveMode.NextTimeItteration)
+                save_next_time_signal = False
+
+            if stop_time_signal:
                 return 4  # return with code 4
 
         # ------------------- End of time itteration
@@ -1067,9 +1113,12 @@ def train_model(
             training_context.save_model_weights(SaveMode.NextEpochItteration)
 
         # Handle stop epoch signal
-        if stop_epoch_signal:
-            print(f"Stopping after epoch {epoch + 1}.")
+        if stop_epoch_signal or save_next_time_signal:
+            print(f"Saving after epoch {epoch + 1}.")
             training_context.save_model_weights(SaveMode.NextEpochItteration)
+            save_next_time_signal = False
+
+        if stop_epoch_signal:
             return 5  # Exit with code 5
 
     print("Training complete.")
@@ -1079,16 +1128,25 @@ def train_model(
     return 0
 
 
-def main(start_from_zero=True, continue_training=False, epoch_index=None, time_index=None, finger_index=DEFAULT_FINGER_INDEX):
-    # Register signal handlers
-    signal.signal(signal.SIGTERM, handle_termination_time)  # Kill (no -9)
-    signal.signal(signal.SIGINT, handle_termination_epoch)  # KeyboardInterrupt
-    # signal.signal(signal.SIGTSTP, handle_termination_time)  # Ctrl+Z
-    signal.signal(signal.SIGUSR1, handle_stop_time_signal)
-    signal.signal(signal.SIGUSR2, handle_stop_epoch_signal)
-    signal.signal(signal.SIGRTMIN, handle_save_epoch_signal)
-    signal.signal(signal.SIGRTMIN + 1, handle_save_time_signal)
-
+def main(
+    start_from_zero: bool = True,
+    continue_training: bool = False,
+    epoch_index: Optional[int] = None,
+    time_index: Optional[int] = None,
+    finger_index: int = DEFAULT_FINGER_INDEX,
+    reset: bool = False,
+    melr: float = START_ENCODER_LR,
+    sclr: float = START_SDF_CALCULATOR_LR,
+):
+    # Register signal handlers using SignalType Enum
+    signal.signal(SignalType.TERMINATE_TIME.value, handle_termination_time)  # Kill (no -9)
+    signal.signal(SignalType.TERMINATE_EPOCH.value, handle_termination_epoch)  # KeyboardInterrupt
+    signal.signal(SignalType.STOP_NEXT_TIME.value, handle_stop_time_signal)
+    signal.signal(SignalType.STOP_NEXT_EPOCH.value, handle_stop_epoch_signal)
+    signal.signal(SignalType.SAVE_LAST_TIME.value, handle_save_last_time_signal)
+    signal.signal(SignalType.SAVE_LAST_EPOCH.value, handle_save_last_epoch_signal)
+    signal.signal(SignalType.SAVE_NEXT_TIME.value, handle_save_next_time_signal)
+    signal.signal(SignalType.SAVE_NEXT_EPOCH.value, handle_save_next_epoch_signal)
     # Ensure the weights directory exists
     os.makedirs(NEURAL_WEIGHTS_DIR, exist_ok=True)
 
@@ -1140,12 +1198,15 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
     if continue_training:
         training_context.load_model_weights(epoch_index, time_index)
 
-        training_context.scheduler = CustomLRScheduler(training_context.optimizer, factor=0.8, patience=EPOCH_PATIENCE)
-        pow = 0
-        for i in range(3 * pow):
-            training_context.scheduler.step(i)
+        MORE_STEPS = False
+        if MORE_STEPS:
+            training_context.scheduler = CustomLRScheduler(training_context.optimizer, factor=0.8, patience=EPOCH_PATIENCE)
+            pow = 0
+            for i in range(3 * pow):
+                training_context.scheduler.step(i)
 
-        # This is a monkeys patch to force reducing the scheduler
+        if reset:
+            training_context.reset(mesh_encoder_lr=melr, sdf_calculator_lr=sclr)
 
     try:
         # Train model
@@ -1159,6 +1220,7 @@ def main(start_from_zero=True, continue_training=False, epoch_index=None, time_i
             epochs=NUMBER_EPOCHS,
             start_epoch=epoch_index or 0,
             start_time=time_index or 0,
+            reset=reset,
         )
         if ret == Param.Neither.value:
             send_notification_to_my_phone("Machine Learning", "It worked, End of training, come back")
@@ -1208,6 +1270,23 @@ if __name__ == "__main__":
         type=int,
         help="Specify the time index to continue processing from.",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="reset the optimizer",
+    )
+    # Add --melr and --sclr arguments, only valid if --reset is given
+    parser.add_argument(
+        "--melr",
+        type=float,
+        help="Mesh encoder learning rate (requires --reset)",
+    )
+
+    parser.add_argument(
+        "--sclr",
+        type=float,
+        help="SDF calculator learning rate (requires --reset)",
+    )
 
     args = parser.parse_args()
 
@@ -1234,8 +1313,21 @@ if __name__ == "__main__":
     else:
         finger_index = args.finger_index
 
+    # Validate argument dependencies
+    if args.reset and not args.continue_training:
+        parser.error("--reset requires --continue_training to be specified.")
+
+    if (args.melr or args.sclr) and not args.reset:
+        parser.error("--melr and --sclr require --reset to be specified.")
+
+    melr, sclr = args.melr, args.sclr
+    if args.melr == None:
+        melr = START_ENCODER_LR
+    if args.sclr == None:
+        sclr = START_SDF_CALCULATOR_LR
+
     # Call main and exit with the returned code
-    ret = main(args.start_from_zero, args.continue_training, epoch_index, time_index, finger_index)
+    ret = main(args.start_from_zero, args.continue_training, epoch_index, time_index, finger_index, args.reset, melr, sclr)
     """ Bellow is to:  Returns 0 if succeed, 1 if mesh_encoder_lr=0, 2 if sdf_calculator_lr = 0, 3 if both is"""
     """ Case 3 should not happen because its caught one cycle element in advance by 1 and 2. 1 and 2 is if we have 0 x and we save previous y to 0, well have prev_x = prev_y = 0"""
     """ where x and y are the sdf_calculator_lr and mesh_encoder_lr"""

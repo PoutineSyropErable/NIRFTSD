@@ -7,14 +7,7 @@ from enum import Enum
 # Constants
 SCRIPT_NAME = "14_train_nn_family.py"
 
-
-class SignalType(Enum):
-    TERMINATE_TIME = signal.SIGTERM
-    TERMINATE_EPOCH = signal.SIGINT
-    STOP_NEXT_EPOCH = signal.SIGUSR2
-    STOP_NEXT_TIME = signal.SIGUSR1
-    SAVE_LAST_EPOCH = signal.SIGRTMIN
-    SAVE_LAST_TIME = signal.SIGRTMIN + 1
+from __TRAINING_FILE import SignalType
 
 
 def signal_catch():
@@ -35,6 +28,7 @@ def signal_catch():
     signal.signal(signal.SIGUSR1, handle_stop_time_signal)
     signal.signal(signal.SIGUSR2, handle_stop_epoch_signal)
     signal.signal(signal.SIGRTMIN, handle_save_epoch_signal)
+    signal.signal(signal.SIGRTMIN + 1, handle_save_time_signal)
     signal.signal(signal.SIGRTMIN + 1, handle_save_time_signal)
 
 
@@ -142,6 +136,20 @@ if __name__ == "__main__":
         const=SignalType.SAVE_LAST_TIME,
         dest="signal_type",
         help="Send SIGRTMIN+1 to save weights for the last time iteration.",
+    )
+    group.add_argument(
+        "--save_next_time",
+        action="store_const",
+        const=SignalType.SAVE_NEXT_TIME,
+        dest="signal_type",
+        help="Send SIGRTMIN+1 to save weights for the next time iteration.",
+    )
+    group.add_argument(
+        "--save_next_epoch",
+        action="store_const",
+        const=SignalType.SAVE_NEXT_EPOCH,
+        dest="signal_type",
+        help="Send SIGRTMIN+1 to save weights for the next time iteration.",
     )
 
     args = parser.parse_args()
