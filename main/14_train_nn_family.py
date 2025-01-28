@@ -18,7 +18,8 @@ import numpy as np
 import copy
 from typing import Optional
 from typing import Tuple
-
+from typing import Callable
+from typing import Dict
 
 from enum import Enum
 
@@ -74,88 +75,94 @@ class Param(Enum):
     Neither = 2
     Both = 3
 
-    # Define focus lengths for each learning mode
+    # Define cycle lengths for each learning mode
 
 
-FOCUS_LENGTHS = {
-    Param.Both: 4,  # Focus length for Both
-    Param.MeshEncoder: 15,  # Focus length for MeshEncoder
-    Param.SDFCalculator: 8,  # Focus length for SDFCalculator
+def both_length(n: int):
+    return 4
+
+
+def mesh_encoder_length(n: int):
+    return 4
+
+
+def sdf_calculator_length(n: int):
+    return 4
+
+
+CYCLE_LENGTHS = {
+    Param.MeshEncoder: mesh_encoder_length,  # cycle length for MeshEncoder
+    Param.Both: both_length,  # cycle length for Both
+    Param.SDFCalculator: sdf_calculator_length,  # cycle length for SDFCalculator
 }
-CYCLE_ORDER = [Param.Both, Param.MeshEncoder, Param.SDFCalculator]  # Dynamic focus cycle order
-MESH_ONLY_LR_DIVIDE = 3.5  # dont use that anymore since we dropped the learning rates
+CYCLE_ORDER = [Param.MeshEncoder, Param.Both, Param.SDFCalculator]  # Dynamic cycle cycle order
 
 
-def get_previous_focus(cycle_order, current_focus):
+def get_next_cycle(current_cycle):
     """
-    Returns the step before the given current_focus in the cycle order.
+    Returns the step before the given current_cycle in the cycle order.
 
     Args:
-        cycle_order (list): The list defining the focus cycle order.
-        current_focus (Param): The enum value representing the current focus.
+        cycle_order (list): The list defining the cycle cycle order.
+        current_cycle (Param): The enum value representing the current cycle.
 
     Returns:
-        Param: The enum value before current_focus in the cycle.
+        Param: The enum value before current_cycle in the cycle.
     """
-    if current_focus not in cycle_order:
-        raise ValueError(f"{current_focus} is not in the cycle_order list.")
+    if current_cycle not in CYCLE_ORDER:
+        raise ValueError(f"{current_cycle} is not in the cycle_order list.")
 
-    current_index = cycle_order.index(current_focus)  # Find the index of current_focus
-    previous_index = (current_index - 1) % len(cycle_order)  # Get the index of the previous step (cyclically)
-    return cycle_order[previous_index]
+    current_index = CYCLE_ORDER.index(current_cycle)  # Find the index of current_cycle
+    previous_index = (current_index + 1) % len(CYCLE_ORDER)  # Get the index of the previous step (cyclically)
+    return CYCLE_ORDER[previous_index]
 
 
-def generate_focus_switch_points(cycle_order, focus_lengths, number_epochs):
+def get_previous_cycle(current_cycle):
     """
-    Generate arrays for switch points at the start of each focus step.
+    Returns the step before the given current_cycle in the cycle order.
 
     Args:
-        cycle_order (list): List of Param enums defining the focus cycle order.
-        focus_lengths (dict): Dictionary mapping Param enums to their focus lengths.
-        number_epochs (int): Total number of epochs.
+        cycle_order (list): The list defining the cycle cycle order.
+        current_cycle (Param): The enum value representing the current cycle.
 
     Returns:
-        dict: Dictionary with Param keys and lists of switch epochs as values.
+        Param: The enum value before current_cycle in the cycle.
     """
-    focus_switch_points = {focus: [] for focus in cycle_order}  # Initialize lists for each focus mode
-    epoch = 0
-    while epoch < number_epochs:
-        for focus in cycle_order:
-            if epoch < number_epochs:
-                focus_switch_points[focus].append(epoch)
-                epoch += focus_lengths[focus]
-            else:
-                break
-    return focus_switch_points
+    if current_cycle not in CYCLE_ORDER:
+        raise ValueError(f"{current_cycle} is not in the cycle_order list.")
+
+    current_index = CYCLE_ORDER.index(current_cycle)  # Find the index of current_cycle
+    previous_index = (current_index - 1) % len(CYCLE_ORDER)  # Get the index of the previous step (cyclically)
+    return CYCLE_ORDER[previous_index]
 
 
-# Generate arrays for switch points
-focus_switch_points = generate_focus_switch_points(CYCLE_ORDER, FOCUS_LENGTHS, NUMBER_EPOCHS)
+def generate_cycles():
+    current_epoch: int = 0
+    current_cycle: Param = next(iter(Param))
 
-# Assign arrays to specific variables for clarity
-EPOCH_LEARN_BOTH = focus_switch_points[Param.Both]
-EPOCH_LEARN_MESH_ENCODER = focus_switch_points[Param.MeshEncoder]
-EPOCH_LEARN_SDF_CALCULATOR = focus_switch_points[Param.SDFCalculator]
+    cycle_switch_dict: Dict[int, Param] = {}
+    cycle_number_dict = {Param.MeshEncoder: 0, Param.Both: 0, Param.SDFCalculator: 0}
+    while True:
+        cycle_switch_dict[current_epoch] = current_cycle
+
+        length_function: Callable[[int], int] = CYCLE_LENGTHS[current_cycle]
+        current_cycle_number: int = cycle_number_dict[current_cycle]
+        cycle_length: int = length_function(current_cycle_number)
+        current_epoch += cycle_length
+
+        cycle_number_dict[current_cycle] += 1
+
+        current_cycle = get_next_cycle(current_cycle)
+
+        if current_epoch >= NUMBER_EPOCHS:
+            break
+
+    return cycle_switch_dict
 
 
-# Loop through CYCLE_ORDER and print arrays in the specified order
-for param in CYCLE_ORDER:
-    if param == Param.Both:
-        print(f"EPOCH_LEARN_BOTH = {EPOCH_LEARN_BOTH}")
-    elif param == Param.MeshEncoder:
-        print(f"EPOCH_LEARN_MESH_ENCODER = {EPOCH_LEARN_MESH_ENCODER}")
-    elif param == Param.SDFCalculator:
-        print(f"EPOCH_LEARN_SDF_CALCULATOR = {EPOCH_LEARN_SDF_CALCULATOR}")
+CYCLE_SWITCH_DICT: Dict[int, Param] = generate_cycles()
 
-
-# Example usage of get_previous_focus
-current_focus = Param.SDFCalculator
-previous_focus = get_previous_focus(CYCLE_ORDER, current_focus)
-print(f"The step before {current_focus.name} is {previous_focus.name}.")
-
-
-# ----- Latent vector regularization to force difference
-# Cancelled because it didn't work
+print(f"cycle_switch_dict = \n{CYCLE_SWITCH_DICT}\n")
 
 # ------------------ END of Hyper Parameters
 
@@ -914,75 +921,41 @@ def train_model(
         total_loss: float = 0
         total_validation_loss: float = 0
 
-        all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
-
-        if epoch < EPOCH_SHUFFLING_START:
-            if epoch % 2 == 0:
-                all_ts_shuffled = all_ts
-            else:
-                all_ts_shuffled = all_ts[::-1]
-
-        else:
-            all_ts_shuffled = np.random.permutation(all_ts)
-
         # Space
 
         if epoch == EPOCH_SHUFFLING_START:
             print("________________________STARTING TO SHUFFLE THE TIME ITTERATION________________________")
 
-        if epoch == EPOCH_WHERE_DROP_MESH_LR:
-            print("________________________DROPPING MESH ENCONDER LEARNING RATE TO SDF CALCULATOR LEARNING RATE________________________")
-            _, sdf_calculator_lr = training_context.get_learning_rates()
-            if sdf_calculator_lr == 0:
-                sdf_calculator_lr = training_context.previous_sdf_calculator_lr
-                print("------USING PREVIOUS SDF LR SINCE IT WAS 0 ------------")
-            training_context.adjust_encoder_lr(sdf_calculator_lr)
+        if epoch in CYCLE_SWITCH_DICT:
+            current_cycle = CYCLE_SWITCH_DICT[epoch]
+            if current_cycle == Param.MeshEncoder:
+                print("|||||||\t\t________________________LEARNING THE MESH ENCODING________________________ Taking sdf_lr/5")
+                _, training_context.previous_sdf_calculator_lr = training_context.get_learning_rates()
+                if training_context.previous_sdf_calculator_lr == 0:
+                    return Param.SDFCalculator.value
 
-        if epoch in EPOCH_LEARN_MESH_ENCODER:
-            print("|||||||\t\t________________________LEARNING THE MESH ENCODING________________________ Taking sdf_lr/5")
-            _, training_context.previous_sdf_calculator_lr = training_context.get_learning_rates()
-            print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
-            print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
-            if training_context.previous_sdf_calculator_lr == 0:
-                return Param.SDFCalculator.value
-
-            prev = get_previous_focus(CYCLE_ORDER, Param.MeshEncoder)
-            if prev == Param.Both:
-                if False:
-                    chosen_lr = min(training_context.previous_mesh_encoder_lr, training_context.previous_sdf_calculator_lr)
-                    training_context.adjust_encoder_lr(chosen_lr / MESH_ONLY_LR_DIVIDE)
-                    MESH_ONLY_LR_DIVIDE = max(MESH_ONLY_LR_DIVIDE - 0.5, 1)
-                else:
-
-                    training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
-            else:
-                print("\n\n\n\nThis should never happen\n\n\n\n")
-            training_context.adjust_sdf_calculator_lr(0)
-
-        elif epoch in EPOCH_LEARN_SDF_CALCULATOR:
-            print("|||||||\t\t________________________LEARNING THE SDF CALCULATOR________________________")
-            training_context.previous_mesh_encoder_lr, _ = training_context.get_learning_rates()
-            print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
-            print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
-            if training_context.previous_mesh_encoder_lr == 0:
-                return Param.MeshEncoder.value
-            prev = get_previous_focus(CYCLE_ORDER, Param.SDFCalculator)
-            print(f"\n{prev.name}")
-            if prev == Param.MeshEncoder:
-                print("prev")
-                training_context.adjust_sdf_calculator_lr(training_context.previous_sdf_calculator_lr)
-            training_context.adjust_encoder_lr(0)
-
-        elif epoch in EPOCH_LEARN_BOTH:
-            print(f"|||||||\t\t________________________LEARNING BOTH___________________________")
-            prev = get_previous_focus(CYCLE_ORDER, Param.Both)
-            print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
-            print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
-            if prev == Param.MeshEncoder:
-                print("\n\n\n\t\t-------THIS SHOULD NEVER HAPPEN______________________________-XXXXXXXX")
-                training_context.adjust_sdf_calculator_lr(training_context.previous_sdf_calculator_lr)
-            if prev == Param.SDFCalculator:
                 training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
+                training_context.adjust_sdf_calculator_lr(0)
+
+            elif current_cycle == Param.SDFCalculator:
+                print("|||||||\t\t________________________LEARNING THE SDF CALCULATOR________________________")
+                training_context.previous_mesh_encoder_lr, _ = training_context.get_learning_rates()
+                if training_context.previous_mesh_encoder_lr == 0:
+                    return Param.MeshEncoder.value
+
+                training_context.adjust_sdf_calculator_lr(training_context.previous_sdf_calculator_lr)
+                training_context.adjust_encoder_lr(0)
+
+            elif current_cycle == Param.Both:
+                print(f"|||||||\t\t________________________LEARNING BOTH___________________________")
+                prev = get_previous_cycle(Param.Both)
+                if prev == Param.MeshEncoder:
+                    training_context.adjust_sdf_calculator_lr(training_context.previous_sdf_calculator_lr)
+                if prev == Param.SDFCalculator:
+                    training_context.adjust_encoder_lr(training_context.previous_mesh_encoder_lr)
+
+                print(f"training_context.previous_sdf_calculator_lr = {training_context.previous_sdf_calculator_lr}")
+                print(f"training_context.previous_mesh_encoder_lr = {training_context.previous_mesh_encoder_lr}")
         else:
             pe, ps = training_context.get_learning_rates()
             if pe != 0:
@@ -1006,8 +979,16 @@ def train_model(
         if current_lr[0] == 0 and current_lr[1] == 0:
             return Param.Both.value
 
+        all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
+        if epoch < EPOCH_SHUFFLING_START:
+            if epoch % 2 == 0:
+                all_ts_shuffled = all_ts
+            else:
+                all_ts_shuffled = all_ts[::-1]
+
+        else:
+            all_ts_shuffled = np.random.permutation(all_ts)
         # ------------------------------------------------------------------------------------------ FOR LOOP ---------------------------------------------------------------------
-        all_latent_vector = []
         for i, t_index in enumerate(all_ts_shuffled):
 
             # ------------ Get data for the current time step
