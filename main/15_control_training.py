@@ -10,26 +10,31 @@ SCRIPT_NAME = "14_train_nn_family.py"
 from __TRAINING_FILE import SignalType
 
 
-def signal_catch():
+def __signal_catch_NEVER_CALL():
     """
     Placeholder function for signal handlers in the controlled script.
-    These are defined in the actual script being controlled.
+    These handlers are defined in the actual script being controlled.
     """
-    handle_termination_time = lambda a, b: True
-    handle_termination_epoch = lambda a, b: True
-    handle_stop_time_signal = lambda a, b: True
-    handle_stop_epoch_signal = lambda a, b: True
-    handle_save_time_signal = lambda a, b: True
-    handle_save_epoch_signal = lambda a, b: True
 
-    signal.signal(signal.SIGTERM, handle_termination_time)
-    signal.signal(signal.SIGINT, handle_termination_epoch)
-    signal.signal(signal.SIGTSTP, handle_termination_time)
-    signal.signal(signal.SIGUSR1, handle_stop_time_signal)
-    signal.signal(signal.SIGUSR2, handle_stop_epoch_signal)
-    signal.signal(signal.SIGRTMIN, handle_save_epoch_signal)
-    signal.signal(signal.SIGRTMIN + 1, handle_save_time_signal)
-    signal.signal(signal.SIGRTMIN + 1, handle_save_time_signal)
+    # Placeholder handlers that do nothing meaningful
+    handle_termination_time = lambda signum, frame: None
+    handle_termination_epoch = lambda signum, frame: None
+    handle_stop_time_signal = lambda signum, frame: None
+    handle_stop_epoch_signal = lambda signum, frame: None
+    handle_save_last_time_signal = lambda signum, frame: None
+    handle_save_last_epoch_signal = lambda signum, frame: None
+    handle_save_next_time_signal = lambda signum, frame: None
+    handle_save_next_epoch_signal = lambda signum, frame: None
+
+    # Register the signal handlers
+    signal.signal(signal.SIGTERM, handle_termination_time)  # Terminate the process (soft kill)
+    signal.signal(signal.SIGINT, handle_termination_epoch)  # Keyboard interrupt
+    signal.signal(signal.SIGUSR1, handle_stop_time_signal)  # Stop after the current time iteration
+    signal.signal(signal.SIGUSR2, handle_stop_epoch_signal)  # Stop after the current epoch iteration
+    signal.signal(signal.SIGRTMIN, handle_save_last_time_signal)  # Save at the current time (last time)
+    signal.signal(signal.SIGRTMIN + 1, handle_save_last_epoch_signal)  # Save at the current epoch (last epoch)
+    signal.signal(signal.SIGRTMIN + 2, handle_save_next_time_signal)  # Save after the next time iteration
+    signal.signal(signal.SIGRTMIN + 3, handle_save_next_epoch_signal)  # Save after the next epoch iteration
 
 
 def send_signal(pid, signal_type):

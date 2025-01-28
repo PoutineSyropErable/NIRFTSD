@@ -17,8 +17,6 @@ import torch.nn.functional as F
 import numpy as np
 import copy
 from typing import Optional
-from typing import Tuple
-
 
 from enum import Enum
 
@@ -543,6 +541,7 @@ class DummyScheduler:
             min_loss (float): The minimum loss value to set.
         """
         self.min_loss = min_loss
+        print(f"Minimum loss set to: {self.min_loss}")
 
     def step(self, training_loss: float) -> bool:
         """
@@ -620,7 +619,7 @@ class TrainingContext:
                 {"params": self.sdf_calculator.parameters(), "lr": sdf_calculator_lr},
             ]
         )
-        self.scheduler: CustomLRScheduler = CustomLRScheduler(self.optimizer, factor=EPOCH_FACTOR, patience=EPOCH_PATIENCE)
+        self.scheduler: CustomLRScheduler = CustomLRScheduler(self.optimizer, factor=TIME_FACTOR, patience=TIME_PATIENCE)
         self.dummy_scheduler: DummyScheduler = DummyScheduler()  # only for training improvement tracking
         self.previous_mesh_encoder_lr = mesh_encoder_lr
         self.previous_sdf_calculator_lr = sdf_calculator_lr
@@ -783,10 +782,14 @@ class TrainingContext:
         self.previous_epoch_index = epoch_index
 
 
-def get_previous_min(training_context: TrainingContext, start_epoch: int = 0, last_reset_epoch: int = 0) -> Tuple[float, float]:
+def get_previous_min(training_context, start_epoch, last_reset_epoch):
     min_validate_loss = float("inf")
     min_training_loss = float("inf")
 
+    print(f"np.shape(training_context.loss_tracker) = {np.shape(training_context.loss_tracker)}")
+    print(f"np.shape(training_context.loss_tracker_validate) = {np.shape(training_context.loss_tracker_validate)}")
+    print(f"training_context.loss_tracker = {training_context.loss_tracker[last_reset_epoch:]}\n\n")
+    print(f"training_context.loss_tracker_validate = {training_context.loss_tracker_validate[last_reset_epoch:]}")
     if start_epoch < EPOCH_SCHEDULER_CHANGE:
         for loss_validates in training_context.loss_tracker_validate[last_reset_epoch:]:
             loss_validates_non_zero = loss_validates[loss_validates > 0]
@@ -797,7 +800,7 @@ def get_previous_min(training_context: TrainingContext, start_epoch: int = 0, la
                 min_validate_loss = min_loss
 
         for loss_trainings in training_context.loss_tracker[last_reset_epoch:]:
-            loss_trainings_non_zero = loss_trainings[loss_trainings > 0]
+            loss_trainings_non_zero = loss_trainings[loss_validates > 0]
             if len(loss_trainings_non_zero) == 0:
                 continue
             min_loss = np.min(loss_trainings_non_zero)  # Avoid zero values
@@ -807,16 +810,17 @@ def get_previous_min(training_context: TrainingContext, start_epoch: int = 0, la
     else:
         for loss_validates in training_context.loss_tracker_validate[last_reset_epoch:]:
 
+            print(f"loss_validates = {loss_validates}")
             loss_validates_non_zero = loss_validates[loss_validates > 0]
+            print("it got here")
             if len(loss_validates_non_zero) == 0:
                 continue
             min_loss = np.mean(loss_validates_non_zero)  # Avoid zero values
             if min_loss < min_validate_loss:
                 min_validate_loss = min_loss
 
-        for loss_trainings in training_context.loss_tracker[last_reset_epoch:]:
-
-            loss_trainings_non_zero = loss_trainings[loss_trainings > 0]
+        for loss_trainings in training_context.loss_tracker[last_reset_epoch]:
+            loss_trainings_non_zero = loss_trainings[loss_validates > 0]
             if len(loss_trainings_non_zero) == 0:
                 continue
             min_loss = np.mean(loss_trainings_non_zero)  # Avoid zero values
