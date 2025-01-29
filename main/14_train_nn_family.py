@@ -16,25 +16,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import copy
-from typing import Optional
-from typing import Tuple
-from typing import Callable
-from typing import Dict
-
+from typing import Optional, Tuple, Callable, Dict, List
 from enum import Enum
 
 from __send_notification_sl import main as send_notification_to_my_phone
 
 
 class SignalType(Enum):
-    TERMINATE_TIME = signal.SIGTERM
-    TERMINATE_EPOCH = signal.SIGINT
-    STOP_NEXT_TIME = signal.SIGUSR1
+    TERMINATE_EPOCH = signal.SIGINT  # Ctrl + C
     STOP_NEXT_EPOCH = signal.SIGUSR2
-    SAVE_LAST_TIME = signal.SIGRTMIN
     SAVE_LAST_EPOCH = signal.SIGRTMIN + 1
-    SAVE_NEXT_TIME = signal.SIGRTMIN + 2
-    SAVE_NEXT_EPOCH = signal.SIGRTMIN + 3
+    SAVE_NEXT_EPOCH = signal.SIGRTMIN + 2
 
 
 # Directory containing the pickle files
@@ -51,7 +43,7 @@ START_ENCODER_LR = 0.0075
 START_SDF_CALCULATOR_LR = 0.005
 EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 3  # When the scheduling for time starts
 
-EPOCH_SHUFFLING_START = 6  # When we start shuffling the time index rather then doing it /\/\/\
+EPOCH_SHUFFLING_START = 0  # When we start shuffling the time index rather then doing it /\/\/\
 EPOCH_SCHEDULER_CHANGE = 20  # When we start stepping the scheduler with the avg validation loss
 EPOCH_WHERE_DROP_MESH_LR = [-1]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
 EPOCH_WHERE_RESET_MIN_LOSS = [2, 3, 4]
@@ -66,6 +58,11 @@ EPOCH_WHERE_SAVE_ALL = 50  # the epochs where we save the weights after every ru
 
 
 NUMBER_EPOCHS = 1000  # Total number of epochs
+# ------------------------------- Latent vector difference regularisation
+
+
+def alpha_f(epoch: int) -> float:
+    return 0.5 / (epoch + 1) ** (1.2)
 
 
 # ---------------------- Learning Cycle Parameters
@@ -78,11 +75,14 @@ class Param(Enum):
     # Define cycle lengths for each learning mode
 
 
-def both_length(n: int):
-    return 4
-
-
 def mesh_encoder_length(n: int):
+    if n == 1:
+        return 100
+    else:
+        return 5
+
+
+def both_length(n: int):
     return 4
 
 
@@ -164,6 +164,7 @@ CYCLE_SWITCH_DICT: Dict[int, Param] = generate_cycles()
 
 print(f"cycle_switch_dict = \n{CYCLE_SWITCH_DICT}\n")
 
+
 # ------------------ END of Hyper Parameters
 
 
@@ -182,61 +183,10 @@ class SaveMode(Enum):
     End = 5
 
 
-# Signal handlers
-def handle_stop_time_signal(signum, frame):
-    global stop_time_signal
-    stop_time_signal = True
-    print("Received stop time signal. Will stop after the current time iteration.")
-
-
 def handle_stop_epoch_signal(signum, frame):
     global stop_epoch_signal
     stop_epoch_signal = True
     print("Received stop epoch signal. Will stop after the current epoch iteration.")
-
-
-def handle_save_last_epoch_signal(signum, frame):
-    """
-    Handle termination signals (SIGTERM, SIGINT).
-    Save weights at the current epoch and time index before exiting.
-    """
-    global training_context
-    print("Received save previous epoch signal")
-    training_context.save_model_weights(SaveMode.NowEpoch)
-
-
-def handle_save_last_time_signal(signum, frame):
-    """
-    Handle termination signals (SIGTERM, SIGINT).
-    Save weights at the current epoch and time index before exiting.
-    """
-    print("Received save previous time signal")
-    global training_context
-    training_context.save_model_weights(SaveMode.NowTime)
-
-
-# Signal handlers
-def handle_save_next_time_signal(signum, frame):
-    global save_next_time_signal
-    save_next_time_signal = True
-    print("Received save next time signal. Will save results after the current time iteration.")
-
-
-def handle_save_next_epoch_signal(signum, frame):
-    global save_next_epoch_signal
-    save_next_epoch_signal = True
-    print("Received save next epoch signal. Will save results after the current epoch iteration.")
-
-
-def handle_termination_time(signum, frame):
-    """
-    Handle termination signals (SIGTERM, SIGINT).
-    Save weights at the current epoch and time index before exiting.
-    """
-    print("\nhandling time termination, save.NowTime, then exit\n")
-    global training_context
-    training_context.save_model_weights(SaveMode.NowTime)
-    exit(1)
 
 
 def handle_termination_epoch(signum, frame):
@@ -248,6 +198,22 @@ def handle_termination_epoch(signum, frame):
     global training_context
     training_context.save_model_weights(SaveMode.NowEpoch)
     exit(2)
+
+
+def handle_save_next_epoch_signal(signum, frame):
+    global save_next_epoch_signal
+    save_next_epoch_signal = True
+    print("Received save next epoch signal. Will save results after the current epoch iteration.")
+
+
+def handle_save_last_epoch_signal(signum, frame):
+    """
+    Handle termination signals (SIGTERM, SIGINT).
+    Save weights at the current epoch and time index before exiting.
+    """
+    global training_context
+    print("Received save previous epoch signal")
+    training_context.save_model_weights(SaveMode.NowEpoch)
 
 
 def get_latest_saved_indices():
@@ -271,33 +237,7 @@ def get_latest_saved_time_for_epoch(epoch):
     Returns:
         int: Latest time index for the given epoch.
     """
-    # Get weight files corresponding to the given epoch
-    weights_files = [f for f in os.listdir(NEURAL_WEIGHTS_DIR) if f.endswith(".pth") and f"epoch_{epoch}_" in f]
-
-    if not weights_files:
-        raise ValueError(f"No saved weights found for epoch {epoch}.")
-
-    # Extract time indices
-    time_indices = []
-    print(f"weights_files = \n{weights_files}\n")
-    for w in weights_files:
-        try:
-            # Extract the time index using regex
-            match = re.search(r"time_(\d+)_finger_", w)
-            if match:
-                time_index = int(match.group(1))  # Extract the number between "time_" and "_finger_"
-                time_indices.append(time_index)
-            else:
-                print(f"Skipping invalid file: {w}")  # Log files that don't match the pattern
-        except ValueError:
-            print(f"Skipping invalid file: {w}")
-
-    # Handle empty time_indices gracefully
-    if not time_indices:
-        raise ValueError(f"No valid time indices found for epoch {epoch} in files: {weights_files}")
-
-    print(f"time_indices = {time_indices}")
-    return max(time_indices)
+    return 0
 
 
 def read_pickle(directory, filename, finger_index, validate=False):
@@ -902,12 +842,15 @@ def train_model(
 
     criterion = nn.MSELoss()
 
+    loss_validate, loss_training = float("inf"), float("inf")
     if not reset:
         min_training_loss, min_validate_loss = get_previous_min(training_context, start_epoch, 592)
         training_context.scheduler.set_min_loss(min_validate_loss)
         training_context.dummy_scheduler.set_min_loss(min_training_loss)
 
         print(f"\nPrevious mins: {min_training_loss}, {min_validate_loss}\n")
+    else:
+        min_training_loss, min_validate_loss = get_previous_min(training_context, start_epoch, 0)
 
     training_context.save_model_weights(SaveMode.NowEpoch)
 
@@ -968,18 +911,16 @@ def train_model(
             training_context.scheduler.set_min_loss(loss_validate)
             training_context.dummy_scheduler.set_min_loss(loss_training)
 
-        if epoch == 3 and False:
-            print("----HALVING LEARNING RATE--------")
-            pe, ps = training_context.get_learning_rates()
-            training_context.scheduler.set_encoder_lr(pe / 1.5)
-            training_context.scheduler.set_sdf_calculator_lr(pe / 1.5)
-
         current_lr = training_context.scheduler.get_last_lr()
         print(f"current lr = {current_lr}")
         if current_lr[0] == 0 and current_lr[1] == 0:
             return Param.Both.value
 
-        all_ts = list(range(start_time if epoch == start_epoch else 0, vertices_tensor.shape[0]))
+        all_ts = list(range(0, vertices_tensor.shape[0]))
+        if len(all_ts) % 2 != 0:
+            all_ts = all_ts[:-1]
+
+        print(f"len(all_ts) = {len(all_ts)}")
         if epoch < EPOCH_SHUFFLING_START:
             if epoch % 2 == 0:
                 all_ts_shuffled = all_ts
@@ -988,77 +929,107 @@ def train_model(
 
         else:
             all_ts_shuffled = np.random.permutation(all_ts)
+
         # ------------------------------------------------------------------------------------------ FOR LOOP ---------------------------------------------------------------------
-        for i, t_index in enumerate(all_ts_shuffled):
+        for i2 in range(0, len(all_ts), 2):
+            all_t_index = np.zeros(2, dtype=np.int64) - 1
+            all_validation_loss = np.zeros(2, dtype=np.float64)
 
-            # ------------ Get data for the current time step
-            # Flatten vertices (1, num_vertices * 3)
-            vertices = vertices_tensor[t_index].view(1, -1)
-            # Add batch dimension (1, num_points, 3)
-            points = sdf_points[t_index].unsqueeze(0)
-            ground_truth_sdf = sdf_values[t_index].unsqueeze(0)  # (1, num_points, 1)
+            all_latent_vector: List[Optional[torch.Tensor]] = [None, None]
+            all_sdf_loss: List[Optional[torch.Tensor]] = [None, None]
+            for offset in range(2):
+                i = i2 + offset
+                t_index = all_ts_shuffled[i]
+                all_t_index[offset] = t_index
 
-            # Encode vertices to latent vector
-            latent_vector = training_context.mesh_encoder(vertices)  # (1, latent_dim)
+                # ------------ Get data for the current time step
+                # Flatten vertices (1, num_vertices * 3)
+                vertices = vertices_tensor[t_index].view(1, -1)
+                # Add batch dimension (1, num_points, 3)
+                points = sdf_points[t_index].unsqueeze(0)
+                ground_truth_sdf = sdf_values[t_index].unsqueeze(0)  # (1, num_points, 1)
 
-            # Predict SDF values
-            predicted_sdf = training_context.sdf_calculator(latent_vector, points)
-            # (1, num_points, 1)
+                # Encode vertices to latent vector
+                latent_vector = training_context.mesh_encoder(vertices)  # (1, latent_dim)
+                all_latent_vector[offset] = latent_vector
 
-            # Compute training loss
-            loss = criterion(predicted_sdf, ground_truth_sdf)
-            loss_training = loss.item()
+                # Predict SDF values
+                predicted_sdf = training_context.sdf_calculator(latent_vector, points)
+                # (1, num_points, 1)
 
-            # Compute validation loss
-            points_validate = sdf_points_validate[t_index].unsqueeze(0)
-            ground_truth_sdf_validate = sdf_values_validate[t_index].unsqueeze(0)  # (1, num_points, 1)
-            predicted_sdf_validate = training_context.sdf_calculator(latent_vector, points_validate)
-            loss_validate = criterion(predicted_sdf_validate, ground_truth_sdf_validate).item()
+                # Compute training loss
+                sdf_loss = criterion(predicted_sdf, ground_truth_sdf)
+                loss_training = sdf_loss.item()
+                all_sdf_loss[offset] = sdf_loss
 
-            total_loss += loss_training
-            total_validation_loss += loss_validate
+                # Compute validation loss
+                points_validate = sdf_points_validate[t_index].unsqueeze(0)
+                ground_truth_sdf_validate = sdf_values_validate[t_index].unsqueeze(0)  # (1, num_points, 1)
+                predicted_sdf_validate = training_context.sdf_calculator(latent_vector, points_validate)
+                loss_validate = criterion(predicted_sdf_validate, ground_truth_sdf_validate).item()
 
-            if epoch < EPOCH_SCHEDULER_CHANGE:
-                if epoch < EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING:
-                    validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
-                        loss_validate, Param.Neither, saving_factor=1.4, epoch=epoch
-                    )
-                else:
-                    validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
-                        loss_validate, Param.Both, saving_factor=1.4, epoch=epoch
-                    )
-                training_not_upgrade = training_context.dummy_scheduler.step(loss_training)
+                total_loss += loss_training
+                total_validation_loss += loss_validate
+                all_validation_loss[offset] = loss_validate
 
-                # Custom logging for the learning rate
-                current_lr = training_context.scheduler.get_last_lr()
+                if epoch < EPOCH_SCHEDULER_CHANGE:
+                    if epoch < EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING:
+                        validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
+                            loss_validate, Param.Neither, saving_factor=1.4, epoch=epoch
+                        )
+                    else:
+                        validation_not_upgrade, lowered_lr, save_to_file = training_context.scheduler.step(
+                            loss_validate, Param.Both, saving_factor=1.4, epoch=epoch
+                        )
+                    training_not_upgrade = training_context.dummy_scheduler.step(loss_training)
 
-                upgrade_message = get_upgrade_message(validation_not_upgrade, training_not_upgrade)
+                    # Custom logging for the learning rate
+                    current_lr = training_context.scheduler.get_last_lr()
 
-            ps1 = f"\t{i:03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
-            ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
-            ps3 = f"{current_lr}"
-            ps4 = f"{upgrade_message}" if epoch < EPOCH_SCHEDULER_CHANGE else ""
+                    upgrade_message = get_upgrade_message(validation_not_upgrade, training_not_upgrade)
 
-            print(ps1 + ps2 + ps3 + ps4)
+                ps1 = f"\t\t{i:03d}: Time Iteration {t_index:03d}, Training Loss: {loss_training:.15f}, "
+                ps2 = f"Validation Loss: {loss_validate:.15f}, Learning Rate: "
+                ps3 = f"{current_lr}"
+                ps4 = f"{upgrade_message}" if epoch < EPOCH_SCHEDULER_CHANGE else ""
 
+                print(ps1 + ps2 + ps3 + ps4)
+
+                training_context.loss_tracker[epoch][i] = loss_training
+                training_context.loss_tracker_validate[epoch][i] = loss_validate
+
+            # ---
+            if any(value is None for value in all_latent_vector):
+                print("Guard triggered: One of the latent vector is None")
+                return 69
+            if any(value is None for value in all_sdf_loss):
+                print("Guard triggered: One of the SDF is None")
+                return 666
+
+            mean_loss = torch.mean(torch.stack(all_sdf_loss))
+
+            t_index1, t_index2 = all_t_index
+            time_diff = abs(t_index2 - t_index1)
+
+            latent1, latent2 = all_latent_vector
+            dot_product = torch.dot(latent1.flatten(), latent2.flatten())
+            norm_latent1 = torch.norm(latent1)
+            norm_latent2 = torch.norm(latent2)
+
+            alpha = alpha_f(epoch)
+            cosine_similarity_penalty = dot_product / (norm_latent1 * norm_latent2)
+            latent_loss = alpha * cosine_similarity_penalty / np.sqrt(time_diff)
+
+            loss = mean_loss + latent_loss
             training_context.optimizer.zero_grad()
-            loss.backward(retain_graph=True)
+            loss.backward()
             training_context.optimizer.step()
 
-            training_context.loss_tracker[epoch][i] = loss_training
-            training_context.loss_tracker_validate[epoch][i] = loss_validate
-
-            # Store weights in the previous time step (We assume from this part on, the for loop has ended and the rest is atomic and "hidden", like the t_index++ part)
-            training_context.time_update(t_index)
-
-            # Handle stop time signal
-            if stop_time_signal or save_next_time_signal:
-                print(f"Saving after time iteration {i + 1}/{vertices_tensor.shape[0]}.")
-                training_context.save_model_weights(SaveMode.NextTimeItteration)
-                save_next_time_signal = False
-
-            if stop_time_signal:
-                return 4  # return with code 4
+            mean_val_loss = np.mean(all_validation_loss)
+            valid_dist = np.sqrt(mean_val_loss)
+            val_r = valid_dist / dL2
+            print(f"\tmean_loss = {mean_loss.item()}, cosine_similarity_penalty = {cosine_similarity_penalty.item()}, ", end="")
+            print(f"latent_loss = {latent_loss.item()}, total_loss = {loss.item()}, val_r = {val_r}")
 
         # ------------------- End of time itteration
         training_context.loss_tracker.append(np.zeros(vertices_tensor.shape[0]))
@@ -1135,14 +1106,14 @@ def main(
     sclr: float = START_SDF_CALCULATOR_LR,
 ):
     # Register signal handlers using SignalType Enum
-    signal.signal(SignalType.TERMINATE_TIME.value, handle_termination_time)  # Kill (no -9)
-    signal.signal(SignalType.TERMINATE_EPOCH.value, handle_termination_epoch)  # KeyboardInterrupt
-    signal.signal(SignalType.STOP_NEXT_TIME.value, handle_stop_time_signal)
-    signal.signal(SignalType.STOP_NEXT_EPOCH.value, handle_stop_epoch_signal)
-    signal.signal(SignalType.SAVE_LAST_TIME.value, handle_save_last_time_signal)
+    signal.signal(SignalType.TERMINATE_EPOCH.value, handle_termination_epoch)  # stop now and save previous epoch
+    signal.signal(SignalType.STOP_NEXT_EPOCH.value, handle_stop_epoch_signal)  # stop next epoch
     signal.signal(SignalType.SAVE_LAST_EPOCH.value, handle_save_last_epoch_signal)
-    signal.signal(SignalType.SAVE_NEXT_TIME.value, handle_save_next_time_signal)
     signal.signal(SignalType.SAVE_NEXT_EPOCH.value, handle_save_next_epoch_signal)
+
+    # Register additional signals directly (if not already in SignalType)
+    signal.signal(signal.SIGTERM, handle_termination_epoch)  # kill
+    # Kill -9 can't be caught
     # Ensure the weights directory exists
     os.makedirs(NEURAL_WEIGHTS_DIR, exist_ok=True)
 
