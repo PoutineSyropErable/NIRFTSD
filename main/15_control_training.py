@@ -101,13 +101,6 @@ if __name__ == "__main__":
     # Add mutually exclusive group for signals
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--terminate_time",
-        action="store_const",
-        const=SignalType.TERMINATE_TIME,
-        dest="signal_type",
-        help="Send SIGTERM to terminate the process (time iteration).",
-    )
-    group.add_argument(
         "--terminate_epoch",
         action="store_const",
         const=SignalType.TERMINATE_EPOCH,
@@ -122,32 +115,11 @@ if __name__ == "__main__":
         help="Send SIGUSR2 to stop after the next epoch.",
     )
     group.add_argument(
-        "--stop_next_time",
-        action="store_const",
-        const=SignalType.STOP_NEXT_TIME,
-        dest="signal_type",
-        help="Send SIGUSR1 to stop after the next time iteration.",
-    )
-    group.add_argument(
         "--save_last_epoch",
         action="store_const",
         const=SignalType.SAVE_LAST_EPOCH,
         dest="signal_type",
         help="Send SIGRTMIN to save weights for the last epoch.",
-    )
-    group.add_argument(
-        "--save_last_time",
-        action="store_const",
-        const=SignalType.SAVE_LAST_TIME,
-        dest="signal_type",
-        help="Send SIGRTMIN+1 to save weights for the last time iteration.",
-    )
-    group.add_argument(
-        "--save_next_time",
-        action="store_const",
-        const=SignalType.SAVE_NEXT_TIME,
-        dest="signal_type",
-        help="Send SIGRTMIN+1 to save weights for the next time iteration.",
     )
     group.add_argument(
         "--save_next_epoch",
