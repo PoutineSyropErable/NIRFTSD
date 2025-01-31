@@ -27,9 +27,8 @@ def read_pickle(directory, filename, finger_index, validate=False):
     return output
 
 
-def main():
+def main(epoch_index=2, finger_index=730):
     finger_index = 730
-    epoch_index = 592
     time_index = 0
     vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     faces = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
@@ -68,3 +67,13 @@ def main():
 
 
 main()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="use a trained model to recreate shapes")
+    # Arguments for epoch and time indices
+    parser.add_argument("--epoch_index", type=int, default=2, help="Specify the epoch index to recreate the shape from")
+    parser.add_argument("--finger_index", type=int, default=730, help="Specify the finger index where the force was applied")
+    args = parser.parse_args()
+
+    ret = main(args.epoch_index, args.finger_index)

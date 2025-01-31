@@ -438,6 +438,7 @@ def visualize_mesh_and_points(faces, vertices, b_min, b_max, query_points):
 
 
 def main(epoch_index=100, time_index=0, finger_index=DEFAULT_FINGER_INDEX, visualize_index=0):
+    print(f"Epoch Index = {epoch_index}")
     vertices_tensor_np = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[:-1]
     faces_np = read_pickle(LOAD_DIR, "faces", finger_index)
     sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[:-1]

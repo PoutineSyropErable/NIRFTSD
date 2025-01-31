@@ -151,7 +151,7 @@ def plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords, 
     plt.show()
 
 
-def main(finger_index=DEFAULT_FINGER_INDEX):
+def main(finger_index=DEFAULT_FINGER_INDEX, max_epoch=482):
     """
     Track the output of the MeshEncoder across 13 epochs and generate statistics and plots.
 
@@ -171,10 +171,10 @@ def main(finger_index=DEFAULT_FINGER_INDEX):
 
     rel_changes_all_epochs = []
     # Iterate through 13 epochs
-    max_epoch = 50
-    epoch_list = list(range(1, max_epoch))
+    max_epoch_all_save = 43
+    epoch_list = list(range(2, 43))
     # Add the sequence 12, 22, ..., 592
-    epoch_list.extend(range(52, 593, 10))
+    epoch_list.extend(range(52, max_epoch + 1, 10))
 
     for epoch_index in epoch_list:
         print(f"\nProcessing Epoch {epoch_index}...\n")
@@ -192,7 +192,8 @@ def main(finger_index=DEFAULT_FINGER_INDEX):
         # Plot latent vector statistics for the current epoch
         # plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order, epoch_index)
 
-    plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords=20, epochs=epoch_list)
+    plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords=20, epochs=epoch_list[0:10])
+    plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords=20, epochs=epoch_list[10:30])
 
     plt.figure()
     plt.title("relative change as a function of epoch")
@@ -211,7 +212,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="use a trained model to recreate shapes")
     # Arguments for epoch and time indices
     parser.add_argument("--finger_index", type=int, default=730, help="Specify the finger index where the force was applied")
+    parser.add_argument("--max_epoch", type=int, default=1000, help="Specify the finger index where the force was applied")
     args = parser.parse_args()
 
-    ret = main(args.finger_index)
+    ret = main(args.finger_index, args.max_epoch)
     exit(ret)

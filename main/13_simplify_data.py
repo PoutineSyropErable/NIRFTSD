@@ -516,7 +516,7 @@ def main(DISPLACEMENT_FILE, SDF_FILE, SDF_FILE_VALIDATE, index):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create animation from deformation data.")
-    parser.add_argument("--index", type=int, help="Index of the deformation scenario.")
+    parser.add_argument("--index", type=int, default=730, help="Index of the deformation scenario.")
     # Set up argument parsing
 
     args = parser.parse_args()
