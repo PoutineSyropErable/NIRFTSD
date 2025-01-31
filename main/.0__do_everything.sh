@@ -26,11 +26,11 @@ fi
 python ./1_get_tetra_mesh.py
 python ./2_get_points_to_apply_force.py
 python ./3_filter_points.py
-# ./4_linear_elasticity_finger_pressure_bunny_dynamic.py is iteratively called by ./5_iterate_simulations.py 
-python ./5_iterate_simulations.py & 
+python ./4_linear_elasticity_finger_pressure_bunny_dynamic.py --index=730
+# python ./5_iterate_simulations.py & 
 # create an animation for the 14th point where the force was applied
-python ./7_create_all_plots.py &
-python ./8_filter_too_deformed_meshes.py 
+# python ./7_create_all_plots.py &
+# python ./8_filter_too_deformed_meshes.py 
 
 python ./9_create_animation.py --filter=all & 
 
