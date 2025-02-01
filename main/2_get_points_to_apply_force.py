@@ -6,28 +6,28 @@ import pyvista as pv
 import igl
 
 
+np.random.seed(42)  # Sets the random seed to 42
+
 num_points = 3000
 show_points_generator = False
 
 # For use_circle == False, using points near surface to get normals
-generating_offset_length = 0.05 #The distance between the points on bunny, and point in the air
+generating_offset_length = 0.05  # The distance between the points on bunny, and point in the air
 # used to calculate the normal
 
 
-# For use_circle == True, using points on Bounding Sphere to get normals 
-use_circle = False #Use the sphere to generate, or nearby surface
+# For use_circle == True, using points on Bounding Sphere to get normals
+use_circle = False  # Use the sphere to generate, or nearby surface
 radius_ratio = 1.1
 # radius = np.linalg.norm(center-min_pos)/radius_ratio
 """ Where center and min_pos are the center and min in x,y,z of the bunny mesh"""
-
-
 
 
 print("\n\n------Start of Program------\n\n")
 
 
 def get_data_from_mesh(tetra_mesh, save_to_file=False):
-    conn = tetra_mesh.topology.connectivity(3,0)
+    conn = tetra_mesh.topology.connectivity(3, 0)
     # print("type conn = ",type(conn))
     # print(help(type(conn)))
     # Extract the connectivity data and offsets
@@ -35,10 +35,7 @@ def get_data_from_mesh(tetra_mesh, save_to_file=False):
     offsets = conn.offsets
 
     # Convert the flat connectivity array into a 2D array
-    connectivity_2d = np.array([
-        connectivity_array[start:end]
-        for start, end in zip(offsets[:-1], offsets[1:])
-    ])
+    connectivity_2d = np.array([connectivity_array[start:end] for start, end in zip(offsets[:-1], offsets[1:])])
 
     # Print the result, checkthing the data we GOT(obtained) from dolfinx
     got_points = tetra_mesh._geometry.x
@@ -53,8 +50,7 @@ def get_data_from_mesh(tetra_mesh, save_to_file=False):
     print(f"Mesh geometry (Points):\n{got_points}\n\n")
     print(f"Mesh Topology Connectivity (np array):\n{got_connectivity}")
 
-
-    return got_points, got_connectivity 
+    return got_points, got_connectivity
 
 
 def extract_surface_mesh(points, connectivity):
@@ -134,8 +130,6 @@ def compute_sdf_and_normals(points, faces, query_points):
     return closest_points, normals, sdfs
 
 
-
-
 # Load the mesh from the XDMF file
 with XDMFFile(MPI.COMM_WORLD, "bunny.xdmf", "r") as xdmf:
     tetra_mesh = xdmf.read_mesh(name="Grid")
@@ -145,7 +139,7 @@ with XDMFFile(MPI.COMM_WORLD, "bunny.xdmf", "r") as xdmf:
 print(f"Number of vertices: {tetra_mesh.geometry.x.shape[0]}")
 print(f"Number of tetrahedra: {tetra_mesh.topology.index_map(3).size_local}\n")
 
-points, connectivity = get_data_from_mesh(tetra_mesh) # Just to see we have correctly obtained the code mesh
+points, connectivity = get_data_from_mesh(tetra_mesh)  # Just to see we have correctly obtained the code mesh
 
 # Get the min and max for each column
 x_min, x_max = points[:, 0].min(), points[:, 0].max()
@@ -157,9 +151,9 @@ y_center = np.mean([y_min, y_max])
 z_center = np.mean([z_min, z_max])
 
 min_pos = np.array([x_min, y_min, z_min])
-center = np.array([x_center,y_center,z_center])
+center = np.array([x_center, y_center, z_center])
 
-radius = np.linalg.norm(center-min_pos)/radius_ratio
+radius = np.linalg.norm(center - min_pos) / radius_ratio
 
 
 # Print the results
@@ -173,15 +167,16 @@ print(f"y_center: {y_center}")
 print(f"z_center: {z_center}\n")
 
 
-
 def direction_vector(phi, theta):
     x = np.sin(phi) * np.cos(theta)
     y = np.sin(phi) * np.sin(theta)
     z = np.cos(phi)
     return np.array([x, y, z])
 
-def get_position(phi,theta):
-    return center + radius*direction_vector(phi,theta)
+
+def get_position(phi, theta):
+    return center + radius * direction_vector(phi, theta)
+
 
 print(f"Radius of the inscribed circle: {center}")
 
@@ -189,10 +184,10 @@ print(f"Radius of the inscribed circle: {center}")
 def generate_uniform_angles(num_points):
     """
     Generate uniform angles phi (polar) and theta (azimuthal) for points on a sphere.
-    
+
     Parameters:
     num_points (int): Number of points to generate.
-    
+
     Returns:
     list[tuple]: List of (phi, theta) tuples.
     """
@@ -217,6 +212,7 @@ positions = np.array([get_position(phi, theta) for phi, theta in angles])
 
 print(f"The positions are: \n {positions}\n")
 
+
 def expand_points(points, center, radius):
     """
     Expands points outward from a center by a specified radius.
@@ -237,6 +233,7 @@ def expand_points(points, center, radius):
 
     return expanded_points
 
+
 def sample_random_points(points, n):
     """
     Randomly sample n points from a given array of points.
@@ -250,14 +247,15 @@ def sample_random_points(points, n):
     """
     if n > points.shape[0]:
         n = points.shape[0]
-    
+
     # Generate n random indices
     random_indices = np.random.choice(points.shape[0], n, replace=False)
-    
+
     # Select points at the random indices
     sampled_points = points[random_indices, :]
-    
+
     return sampled_points
+
 
 surface_points, surface_faces = extract_surface_mesh(points, connectivity)
 surface_points_offsets = expand_points(surface_points, center, generating_offset_length)
@@ -267,8 +265,7 @@ if use_circle:
 else:
     generating_points = sample_random_points(surface_points_offsets, num_points)
     print("\nUsing the points near the surface\n")
-closest_points, normals, sdfs =  compute_sdf_and_normals(surface_points, surface_faces, generating_points)
-
+closest_points, normals, sdfs = compute_sdf_and_normals(surface_points, surface_faces, generating_points)
 
 
 # unique_cp = np.unique(closest_points, axis=0)
@@ -309,7 +306,7 @@ def create_line_mesh(positions, closest_points):
     return line_mesh
 
 
-#-------------
+# -------------
 # Create a PyVista Sphere for visualization
 sphere = pv.Sphere(radius=float(radius), center=center)
 
@@ -341,8 +338,8 @@ plotter.add_legend()
 plotter.show()
 
 
-#--------------
- # Combine the arrays for saving
+# --------------
+# Combine the arrays for saving
 data_to_save = np.hstack((closest_points, normals))
 
 # Save to a text file
@@ -350,7 +347,7 @@ np.savetxt("closest_points_and_normals.txt", data_to_save, header="x y z nx ny n
 print("Data saved to 'closest_points_and_normals.txt'")
 
 
-#----------------
+# ----------------
 """ Get the mesh volume"""
 print("\n\n")
 
@@ -368,5 +365,3 @@ tetra_grid = pv.UnstructuredGrid(cells, cell_type, points)
 # Calculate the volume
 volume = tetra_grid.volume
 print(f"Volume of tetrahedral mesh: {volume}")
-
-

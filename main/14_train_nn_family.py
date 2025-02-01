@@ -1,8 +1,49 @@
 """
+To do:
+I'll already do the basic framework of what's bellow. I just need to get the bunny head center correctly.
+Generate the correct index after filtering. Generate all these physics simulations and then modify main
+Look at 
 
-To do: 
-6. Be able to restart with a fresh optimiser, and scheduler, in the stage I want
-And at the end, once the average bunny is found, restart from there with mesh learning rate higher
+
+    THIS IS FOR MY NEXT TODOS, IF I WANT TO ENCODE MULTIPLE PHYSICS SIMULATION INTO IT
+    The idea is that v1 is a vector that points from point of force, to center of head. It tell us it which direction the head will tilt.
+    Then, if we assume the head tilt at a constant velocity, then u*t will be the head tilt vector.
+    We want the difference between those two.
+
+    Currently, there is only one vector. For one physics sim. So, it's t1 - t2
+    we will have to generate multiple simulations
+    Then, we find using the finger index of the simulation, the finger position.
+    The head center is calculated once. Maybe at the start of this file.
+    We calculate u for all physics simulations.
+    Then, we can have:
+
+
+    # Let's say we recreate a bunch of data and simulations with finger index on the head but not ears.
+    # Let's say using a modified ./3_filter_points.py
+    # Example: for a specific z range, so z < top head height, z > neck height
+    for finger_index in simulations_finger_index:
+        vertices_tensor = read_pickle(LOAD_DIR, "vertices_tensor", finger_index)[0:end]
+        sdf_points = read_pickle(LOAD_DIR, "sdf_points", finger_index)[0:end]
+        sdf_values = read_pickle(LOAD_DIR, "sdf_values", finger_index)[0:end]
+        sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)[0:end]
+        sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)[0:end]
+
+    We can check if the element[0] of each is a repeat. if vertices_tensor[0] is always the same, then
+    remove it from all except one.
+    Then, we can extend the vertices_tensor.
+    Then we write a function to get from vertices_tensor index, get the t_index and simulation_index.
+    simulation_index is the nth simulation in the array append/extend
+
+    and t_index is the 0..101 saved time steps.
+    With simulation index, we can do
+    (We have a batch of 2 shape)
+    for each shape:
+    t_index, simulation_index = get_simulation_index(false_t_index)
+    # false_t_index is the current t_index. Since there's just one shape. But we'll have to modify the loop to
+
+    simulation_indices.append(simulation_index)
+    time_indices.append(t_index)
+
 """
 
 import re
@@ -39,7 +80,7 @@ DEFAULT_FINGER_INDEX = 730
 
 
 # ------------------ Start of Hyper Parameters
-LATENT_DIM = 32
+LATENT_DIM = 128
 START_ENCODER_LR = 0.001
 START_SDF_CALCULATOR_LR = 0.005
 EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 3  # When the scheduling for time starts
@@ -110,6 +151,76 @@ def alpha_sdf(epoch: int) -> float:
         return 0
     else:
         return 1
+
+
+def get_simulation_index(false_t_index) -> Tuple[int, int]:
+    """
+    NEED TO MODIFY THIS FUNCTION. IT SHOULD DO SOME KIND OF false_t_index / 101, false_t_index % 101
+    but modify it if we remove the center position.
+    Returns:
+        returns Tuple[int, int]
+
+    return simulation_index, t_index
+    """
+    t_index = false_t_index
+    simulation_index = 0
+    # Once there's multiple shapes, modify this function
+    return simulation_index, t_index
+
+
+FORCE_DIRECTIONS: np.ndarray = np.array([[1.0, 0.0, 0.0]])
+# Init value of correct type. In Main, it is set properly
+
+
+def get_force_direction_vectors(simulation_index1: int, simulation_index2: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Returns:
+        returns Tuple[np.ndarray, np.ndarray]
+
+    return v1, v2
+    """
+    v1 = FORCE_DIRECTIONS[simulation_index1]
+    v2 = FORCE_DIRECTIONS[simulation_index2]
+    return v1, v2
+
+
+ELEMENT_0_CUT_IN_MAIN: bool = False
+
+
+def get_time_diff_general(t1: float, t2: float, v1: Optional[np.ndarray] = None, v2: Optional[np.ndarray] = None):
+    """
+    t1_is_ref: If t1, u1 belongs to the first simulations. The one where we didn't crop the first frame, then it's t=0 means 0 movement
+    Therefore, when t = 0, then there was 0 movement.
+
+    However, if its from another simulations, where we removed the [0] element to stop repeating the
+    reference position N times for N simulations, then the 0th element is actually not for t = 0, but for t = dt
+    Hence, we must add 1.
+
+    HOWEVER, if it is discovered that for all of them, the [0] element is for t=dt, then we can skip the t1_is_ref
+
+    but for the other, then when t = 0, it's actually the first movemement frame of the animation, so we need to add one to t_index
+
+    Returns:
+        returns float
+
+    return time_diff
+    """
+
+    if v1 is None or v2 is None:
+        time_diff = np.abs(t1 - t2)
+        return time_diff
+
+    if ELEMENT_0_CUT_IN_MAIN:
+        t1_is_ref: bool = v1 == FORCE_DIRECTIONS[0]
+        t2_is_ref: bool = v2 == FORCE_DIRECTIONS[0]
+        if not t1_is_ref:
+            t1 = t1 + 1
+        if not t2_is_ref:
+            t2 = t2 + 1
+
+    time_diff = np.linalg.norm(t2 * v2 - t1 * v1)
+    # v1 and v2 should be normalised
+    return time_diff
 
 
 def time_diff_hyperparam_function(time_diff: int) -> float:
@@ -941,10 +1052,14 @@ def train_model(
 
             all_latent_vector: List[Optional[torch.Tensor]] = [None, None]
             all_sdf_loss: List[Optional[torch.Tensor]] = [None, None]
+
+            all_simulation_index = np.zeros(2, dtype=np.int64)
             for offset in range(2):
                 i = i2 + offset
-                t_index = all_ts_shuffled[i]
+                false_t_index = all_ts_shuffled[i]
+                simulation_index, t_index = get_simulation_index(false_t_index)
                 all_t_index[offset] = t_index
+                all_simulation_index[offset] = simulation_index
 
                 # ------------ Get data for the current time step
                 # Flatten vertices (1, num_vertices * 3)
@@ -1003,7 +1118,10 @@ def train_model(
                 return 666
 
             t_index1, t_index2 = all_t_index
-            time_diff = abs(t_index2 - t_index1)
+            simulation_index1, simulation_index2 = all_simulation_index
+
+            v1, v2 = get_force_direction_vectors(simulation_index1, simulation_index2)
+            time_diff = get_time_diff_general(t_index1, t_index2, v1, v2)
 
             latent1, latent2 = all_latent_vector
             dot_product = torch.dot(latent1.flatten(), latent2.flatten())
@@ -1033,7 +1151,7 @@ def train_model(
                     up_msg = "Reg. Training No upgrade"
 
             print(
-                f"\ttime_diff={time_diff}, cosine_similarity_penalty = {cosine_similarity_penalty.item()}, latent_loss = {latent_loss.item()}, ",
+                f"\ttime_diff={time_diff:.2f}, cosine_similarity_penalty = {cosine_similarity_penalty.item()}, latent_loss = {latent_loss.item()}, ",
                 end="",
             )
             print(f" mean_loss = {mean_loss.item()}, total_loss = {loss.item()}, val_r = {val_r} | {up_msg}\n")
@@ -1107,6 +1225,38 @@ def train_model(
     return 0
 
 
+# ---------------------------------------- Temporary functions, not tested
+
+
+def compute_bunny_head_center(vertices, neck_height, head_top_height):
+    """
+    Computes the center of the bounding box formed by filtering vertices
+    where neck_height <= z <= head_top_height.
+
+    Args:
+        vertices (np.ndarray): A (N, 3) NumPy array of vertices (x, y, z).
+        neck_height (float): Lower bound on z-axis.
+        head_top_height (float): Upper bound on z-axis.
+
+    Returns:
+        np.ndarray: The (x, y, z) center of the bounding box.
+    """
+    # Filter vertices within the specified z range
+    filtered_vertices = vertices[(vertices[:, 2] >= neck_height) & (vertices[:, 2] <= head_top_height)]
+
+    if filtered_vertices.size == 0:
+        raise ValueError("No vertices found in the given z-range.")
+
+    # Compute the bounding box min and max along each axis
+    min_xyz = np.min(filtered_vertices, axis=0)
+    max_xyz = np.max(filtered_vertices, axis=0)
+
+    # Compute the center of the bounding box
+    bbox_center = (min_xyz + max_xyz) / 2
+
+    return bbox_center
+
+
 # ------------------------------------- C like Main Function which takes sys arguments.
 def main(
     start_from_zero: bool = True,
@@ -1141,6 +1291,40 @@ def main(
     sdf_points_validate = read_pickle(LOAD_DIR, "sdf_points", finger_index, validate=True)[0:end]
     sdf_values_validate = read_pickle(LOAD_DIR, "sdf_values", finger_index, validate=True)[0:end]
     print("\n")
+
+    """ Start of temporary thing to replace """
+    global FORCE_DIRECTIONS, ELEMENT_0_CUT_IN_MAIN
+
+    ELEMENT_0_CUT_IN_MAIN = False
+    # ^^ If we end up cutting the 0th element of vertices_tensor and sdf_points...
+    simulations_finger_index = np.array([730, 9001, 666, 420])
+    # 730 is the actual current index of the finger_position file for a point on the head.
+    # Once we generate other points and filters, we'll need to do
+    # ^^ This should be obtained by reading from a file created by ./3_filter_points.py
+    # We need to modify ./3_filter_points.py
+    # Also, Let's create a file that shows all filtered finger force points on the bunny and when you click on it,
+    # you can see the finger position (np.array) and finger_index. Let's also make the head center calculation in filter points.
+    # And then we can also see the negated normal and the direction to bunny head center
+
+    FORCE_DIRECTIONS = np.zeros((len(simulations_finger_index), 3))
+    FINGER_POSITIONS_FILES = "filtered_points_of_force_on_boundary.txt"
+    finger_positions = np.loadtxt(FINGER_POSITIONS_FILES, skiprows=1)
+    simulation_indices = np.array(list(range(len(simulations_finger_index))))  # idk if needed
+
+    BUNNY_CENTER_POSITION = compute_bunny_head_center(vertices_tensor[0], neck_height=0, head_top_height=1)
+    # neck_height and head_top height must be found
+
+    for sim_i, finger_i in enumerate(simulation_indices):
+        finger_pos = finger_positions[finger_i]
+        force_direction_also_named_v = BUNNY_CENTER_POSITION - finger_pos
+        FORCE_DIRECTIONS[sim_i] = force_direction_also_named_v / np.linalg.norm(force_direction_also_named_v)
+        # ^^ Maybe also take the normal direction to the surface. (negate it). Then do mean of both. Idk.
+        # ./closest_points_and_normals.txt has the normals. But filtered points have different indices by definition.
+        # so modifying ./3_filter_points.py so it also creates a filtered_normals_on_boundary.txt would be a good idea
+
+    """ Aiming to do FORCE_DIRECTIONS = load from a file calculated in ./3_filter_points.py """
+
+    """ Start of temporary thing to replace """
 
     b_min, b_max = compute_small_bounding_box(vertices_tensor[0])
     dx = b_max - b_min
