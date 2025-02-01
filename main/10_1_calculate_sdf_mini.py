@@ -28,7 +28,7 @@ NUM_POINTS = 1_000_000
 NUM_PRECOMPUTED_CDF = 1000  # Dont make this too big
 BUNNY_FILE = "bunny.xdmf"
 DISPLACMENT_DIR = "./deformed_bunny_files_tunned"
-OUTPUT_DIR = "./calculated_sdf_tunned"
+OUTPUT_DIR = "./training_data/"
 
 
 Z_EXPONENT = 0.3
@@ -617,15 +617,12 @@ def generate_and_save_sdf(
 
 def main():
     # Ensure the directory exists
-    TRAINING_DIR = "./training_data"
-    os.makedirs(TRAINING_DIR, exist_ok=True)
 
     print(f"\n\n{'-'*10} Start of Program{'-'*10}\n\n")
     INDEX = 730
 
     # Input files
     DISPLACEMENT_FILE = f"{DISPLACMENT_DIR}/displacement_{INDEX}.h5"
-    OUTPUT_FILE = f"{OUTPUT_DIR}/sdf_points_{INDEX}.h5"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     points, connectivity, time_steps, deformations = load_mesh_and_deformations(xdmf_file=BUNNY_FILE, h5_file=DISPLACEMENT_FILE)

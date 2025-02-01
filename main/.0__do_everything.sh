@@ -50,12 +50,13 @@ python ./6_create_animation.py --index=730
 
 echo "-------------------------------------------CALCULATION SDF-------------------------------------------------"
 python ./10_1_calculate_sdf_mini.py 
-python ./10_2_simplify_data.py --index=730
+echo "-------------------------------------------SDF History-------------------------------------------------"
 python ./10_6_show_sdf_hist.py 
 # python ./11_iterate_sdf_calculation.py --starting_index=0 --stopping_index=-1 --sdf_only --doall
 
+echo "-------------------------------------------SDF VISUALISATION-------------------------------------------------"
 python ./12_see_sdf.py --finger_index=730 --time_index=100
-python ./13_see_sdf_animation_and_store_data.py
+# python ./13_see_sdf_animation_and_store_data.py
 python ./14_train_nn_family.py --finger_index=730 --start_from_zero
 
 python ./16_5_recreate_simple.py --epoch=482

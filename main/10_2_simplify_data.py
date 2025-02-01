@@ -200,8 +200,17 @@ def process_sdf_data(input_file):
     Args:
         input_file (str): Path to the input HDF5 file containing SDF data.
     """
+    h5_file = input_file + ".h5"
+    pkl_file = input_file + ".pkl"
+
+    if os.path.exists(pkl_file):
+        with open(pkl_file, "rb") as f:
+
+
+        return sdf_points, sdf_values
+
     # Open the input HDF5 file
-    with h5py.File(input_file, "r") as f:
+    with h5py.File(h5_file, "r") as f:
         time_steps = sorted(f.keys())
         print(f"Found {len(time_steps)} time steps.")
 
@@ -462,7 +471,12 @@ def visualize_mesh_with_points(mesh_vertices, mesh_faces, sdf_points, sdf_values
     ps.show()
 
 
-def main(DISPLACEMENT_FILE, SDF_FILE, SDF_FILE_VALIDATE, index):
+def main(index):
+
+    DISPLACEMENT_FILE = f"./deformed_bunny_files_tunned/displacement_{index}.h5"
+    SDF_FILE = f"./calculated_sdf_tunned/sdf_points_{index}"  # Replace with the path to your HDF5 file
+    SDF_FILE_VALIDATE = f"./calculated_sdf_tunned/sdf_points_{index}_validate"  # Replace with the path to your HDF5 file
+
     mesh_points, mesh_connectivity, time_steps, deformations, faces, boundary_vertices_index = load_mesh_and_deformations(
         xdmf_file=BUNNY_FILE, h5_file=DISPLACEMENT_FILE
     )
@@ -520,11 +534,6 @@ if __name__ == "__main__":
     # Set up argument parsing
 
     args = parser.parse_args()
-    index = args.index
 
-    DISPLACEMENT_FILE = f"./deformed_bunny_files_tunned/displacement_{index}.h5"
-    SDF_FILE = f"./calculated_sdf_tunned/sdf_points_{index}.h5"  # Replace with the path to your HDF5 file
-    SDF_FILE_VALIDATE = f"./calculated_sdf_tunned/sdf_points_{index}_validate.h5"  # Replace with the path to your HDF5 file
-
-    ret = main(DISPLACEMENT_FILE, SDF_FILE, SDF_FILE_VALIDATE, index)
+    ret = main(args.index)
     exit(ret)
