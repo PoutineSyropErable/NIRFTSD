@@ -616,6 +616,10 @@ def generate_and_save_sdf(
 
 
 def main():
+    # Ensure the directory exists
+    TRAINING_DIR = "./training_data"
+    os.makedirs(TRAINING_DIR, exist_ok=True)
+
     print(f"\n\n{'-'*10} Start of Program{'-'*10}\n\n")
     INDEX = 730
 
