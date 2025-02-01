@@ -32,11 +32,14 @@ activate_conda_env() {
 #------------------------------------------------------- Run programs
 
 echo "-------------------------------------------GETTING TETRA MESH-------------------------------------------------"
-python ./1_get_tetra_mesh.py
+# It's git included, running the tree bellow will recreate the data using a different seed. so index=730 will be a 
+# different position. Due to linear elasticity equations, if its on ear, it will cause weird behavior in phys sim.
+# Garbage in, garbage out
+# python ./1_get_tetra_mesh.py
 echo "-------------------------------------------GETTING POINTS TO APPLY FORCE-------------------------------------------------"
-python ./2_get_points_to_apply_force.py
+# python ./2_get_points_to_apply_force.py
 echo "-------------------------------------------FILTERTING POINTS-------------------------------------------------"
-python ./3_filter_points.py
+# python ./3_filter_points.py
 echo "-------------------------------------------DOING PHYSICS SIMULATION-------------------------------------------------"
 python ./4_linear_elasticity_finger_pressure_bunny_dynamic.py --index=730
 # python ./5_iterate_simulations.py & 
