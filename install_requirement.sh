@@ -5,5 +5,5 @@ echo "conda env export > environment.yml"
 exit 0
 # do the following command
 # Gave it execute permission so its colored by ls
-conda env create -f environment.yml
+conda env create -f environment_no_build.yml
 

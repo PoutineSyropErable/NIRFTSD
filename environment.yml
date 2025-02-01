@@ -21,6 +21,7 @@ dependencies:
   - blas=1.0=openblas
   - blis=0.9.0=h4ab18f5_2
   - blosc=1.21.6=hef167b5_0
+  - bottleneck=1.4.2=py310ha9d4c09_0
   - brotli=1.1.0=hb9d3cd8_2
   - brotli-bin=1.1.0=hb9d3cd8_2
   - brotli-python=1.1.0=py310hf71b8c6_2
@@ -255,6 +256,7 @@ dependencies:
   - nlohmann_json=3.11.3=he02047a_1
   - nspr=4.36=h5888daf_0
   - nss=3.107=hdf54f9c_0
+  - numexpr=2.10.1=py310hd28fd6d_0
   - numpy=1.26.4=py310hb13e2d6_0
   - ocl-icd=2.3.2=hb9d3cd8_2
   - opencl-headers=2024.10.24=h5888daf_0
@@ -263,6 +265,7 @@ dependencies:
   - openssl=3.4.0=hb9d3cd8_0
   - p11-kit=0.24.1=hc5aa10d_0
   - packaging=24.2=pyhd8ed1ab_2
+  - pandas=2.2.3=py310h6a678d5_0
   - pango=1.54.0=h3a902e7_3
   - parmetis=4.0.3=hc7bef4e_1007
   - pcre2=10.44=hba22ea6_2
@@ -287,8 +290,10 @@ dependencies:
   - pysocks=1.7.1=pyha55dd90_7
   - python=3.10.13=hd12c33a_1_cpython
   - python-dateutil=2.9.0.post0=pyhff2d567_1
+  - python-tzdata=2023.3=pyhd3eb1b0_0
   - python_abi=3.10=5_cp310
   - pytorch=2.3.1=cpu_py310h4f03144_0
+  - pytz=2024.1=py310h06a4308_0
   - pyvista=0.44.2=pyhd8ed1ab_1
   - qhull=2020.2=h434a139_5
   - qt-main=5.15.15=h374914d_0
@@ -298,8 +303,8 @@ dependencies:
   - requests=2.32.3=pyhd8ed1ab_1
   - rich=13.9.4=pyhd8ed1ab_1
   - scalapack=2.2.0=h7e29ba8_4
-  - scikit-image=0.24.0=py310h1128e8f_0
-  - scikit-learn=1.5.2=py310h6a678d5_0
+  - scikit-image=0.25.0=py310h6a678d5_0
+  - scikit-learn=1.6.1=py310h6a678d5_0
   - scipy=1.14.1=py310hfcf56fc_2
   - scooby=0.10.0=pyhd8ed1ab_0
   - setuptools=75.1.0=py310h06a4308_0
@@ -383,4 +388,7 @@ dependencies:
   - pip:
       - imageio-ffmpeg==0.5.1
       - psutil==6.1.1
+      - pushbullet-py==0.12.0
+      - python-magic==0.4.27
+      - websocket-client==1.8.0
 prefix: /home/francois/miniconda3/envs/master_venv

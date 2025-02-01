@@ -277,10 +277,11 @@ def read_pickle(directory, filename, finger_index, validate=False):
     return output
 
 
-def load_pickle(path: str):
+def load_pickle(path: str, debug=True):
     with open(path, "rb") as file:
         output = pickle.load(file)
-        print(f"Loaded {type(output)} from {path}")
+        if debug:
+            print(f"Loaded {type(output)} from {path}")
 
     return output
 
@@ -366,10 +367,11 @@ def get_path(name: str, epoch_index: int, time_index: int, finger_index: int, ex
     return os.path.join(NEURAL_WEIGHTS_DIR, f"{name}_epoch_{epoch_index}_time_{time_index}_finger_{finger_index}.{extension}")
 
 
-def load_dict_from_path(object1, path):
+def load_dict_from_path(object1, path, debug=True):
     if os.path.exists(path):
         object1.load_state_dict(torch.load(path))
-        print(f"Loaded encoder weights from {path}.")
+        if debug:
+            print(f"Loaded encoder weights from {path}.")
     else:
         raise FileNotFoundError(f"Weights/State file not found: {path} Doesn't exist")
 
@@ -631,27 +633,27 @@ class TrainingContext:
         """
         self.scheduler.set_sdf_calculator_lr(new_lr)
 
-    def load_model_weights(self, epoch_index, time_index):
+    def load_model_weights(self, epoch_index, time_index, debug=True):
         encoder_weights_path = get_path("encoder", epoch_index, time_index, self.finger_index)
         calculator_weights_path = get_path("sdf_calculator", epoch_index, time_index, self.finger_index)
         optimizer_state_path = get_path("optimizer", epoch_index, time_index, self.finger_index)
 
-        load_dict_from_path(self.mesh_encoder, encoder_weights_path)
-        load_dict_from_path(self.sdf_calculator, calculator_weights_path)
-        load_dict_from_path(self.optimizer, optimizer_state_path)
+        load_dict_from_path(self.mesh_encoder, encoder_weights_path, debug)
+        load_dict_from_path(self.sdf_calculator, calculator_weights_path, debug)
+        load_dict_from_path(self.optimizer, optimizer_state_path, debug)
 
         loss_tracker_path = get_path("loss_tracker", epoch_index, time_index, self.finger_index, extension="pkl")
         loss_tracker_validate_path = get_path("loss_tracker_validate", epoch_index, time_index, self.finger_index, extension="pkl")
-        self.loss_tracker_validate = load_pickle(loss_tracker_validate_path)
-        self.loss_tracker = load_pickle(loss_tracker_path)
+        self.loss_tracker_validate = load_pickle(loss_tracker_validate_path, debug)
+        self.loss_tracker = load_pickle(loss_tracker_path, debug)
 
         scheduler_state_path = get_path("scheduler", epoch_index, time_index, self.finger_index)
-        self.scheduler = load_pickle(scheduler_state_path)
+        self.scheduler = load_pickle(scheduler_state_path, debug)
 
         previous_mesh_encoder_lr_path = get_path("previous_mesh_encoder_lr", epoch_index, time_index, self.finger_index)
         previous_sdf_calculator_lr_path = get_path("previous_sdf_calculator_lr", epoch_index, time_index, self.finger_index)
-        self.previous_mesh_encoder_lr = load_pickle(previous_mesh_encoder_lr_path)
-        self.previous_sdf_calculator_lr = load_pickle(previous_sdf_calculator_lr_path)
+        self.previous_mesh_encoder_lr = load_pickle(previous_mesh_encoder_lr_path, debug)
+        self.previous_sdf_calculator_lr = load_pickle(previous_sdf_calculator_lr_path, debug)
 
     def save_model_weights(self, mode: SaveMode):
 

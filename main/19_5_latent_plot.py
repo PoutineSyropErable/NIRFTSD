@@ -123,34 +123,6 @@ def plot_latent_vector_stats(latent_vectors, order, change_rel, change_rel_order
     plt.show()
 
 
-def plot_ordered_relative_change_all_epochs(rel_changes_all_epochs, num_coords, epochs):
-    """
-    Plot the ordered relative change for all epochs in one figure using a red-to-blue color mapping.
-
-    Args:
-        rel_changes_all_epochs (list of np.ndarray): List of ordered relative changes for each epoch.
-        num_coords (int): Number of latent vector coordinates to display (top N).
-        epochs (list of int): List of epoch indices.
-    """
-    plt.figure(figsize=(12, 8))
-    plt.title("Ordered Relative Change of Latent Vectors Across Epochs", fontsize=16)
-    plt.xlabel("Latent Vector Coordinate (sorted by relative change)", fontsize=12)
-    plt.ylabel("Relative Change", fontsize=12)
-
-    # Normalize colors across epochs
-    colors = plt.cm.cool(np.linspace(0, 1, len(epochs)))  # Red-to-blue colormap
-
-    for i, (change_rel_order, epoch) in enumerate(zip(rel_changes_all_epochs, epochs)):
-        if i == 0 or i == epochs[-1]:
-            plt.plot(change_rel_order[:num_coords], label=f"Epoch {epoch}", color=colors[i])
-        else:
-            plt.plot(change_rel_order[:num_coords], color=colors[i])
-
-    plt.grid(True)
-    plt.legend(title="Epoch", loc="upper right", fontsize=10)
-    plt.show()
-
-
 def main(finger_index=DEFAULT_FINGER_INDEX, epoch_index=100):
     """
     Track the output of the MeshEncoder across 13 epochs and generate statistics and plots.

@@ -47,6 +47,8 @@ python ./14_train_nn_family.py --finger_index=730 --start_from_zero
 
 python ./16_5_recreate_simple.py --epoch=482
 python ./17_see_loss.py --epoch_index=482
+python ./19_track_latent_vectors.py --max_epoch=1000
+
 
 # python ./6_create_animation.py --index=14 # This will show you the animation
 

@@ -28,6 +28,7 @@ main/sdf_points_filtered.h5
 main/training_data/
 main/calcualed_sdf_tunned
 main/neural_weights/
+main/neural_weights_*/
 
 *.h5
 *.xdmf
@@ -37,3 +38,5 @@ main/neural_weights/
 *.vtu
 *.npy
 *.jpg
+*.pkl
+*.mp4
