@@ -2,6 +2,9 @@ All important files are on ./main
 YOU SHOULD HAVE HIDDEN FILES (.name.ext) FILES VISIBLES.
 THE READMES OF EACH DIR ARE ".\_\_readme.md"
 
+[View the PDF Report](./Latex_Report/main.pdf)
+It's located at ./Latex_Report/main.pdf
+
 In main, the files are written in logical order, of writting and using them.
 They are named in the order that you'd use them.
 There's even a bash file that runs everything for you.
