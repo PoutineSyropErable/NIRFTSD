@@ -1,3 +1,5 @@
+\*\* The readme might not be perfectly consitent with the state. (In particular, the todo list, as it might already be done)
+
 All important files are on ./main
 YOU SHOULD HAVE HIDDEN FILES (.name.ext) FILES VISIBLES.
 THE READMES OF EACH DIR ARE ".\_\_readme.md"
