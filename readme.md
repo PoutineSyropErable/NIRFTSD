@@ -11,6 +11,7 @@ There's even a bash file that runs everything for you.
 
 Link to the google docs with the files that aren't git tracked
 https://drive.google.com/drive/folders/1vpslQHkE8iSuIB2wGIodClNLWq8q9kgH?usp=sharing
+**Check the animations in CHECK_ME**
 
 On the google drive, there is only the first 30 sdf rather then 2000 of them. I'm aiming for 550 on my machine, which will be like 200ish GB of
 data. Could be fine tuned. But No time for that.
