@@ -86,7 +86,7 @@ START_SDF_CALCULATOR_LR = 0.005
 EPOCH_WHERE_TIME_PATIENCE_STARTS_APPLYING = 3  # When the scheduling for time starts
 
 EPOCH_SHUFFLING_START = 0  # When we start shuffling the time index rather then doing it /\/\/\
-EPOCH_SCHEDULER_CHANGE = 20  # When we start stepping the scheduler with the avg validation loss
+EPOCH_SCHEDULER_CHANGE = 50  # When we start stepping the scheduler with the avg validation loss
 EPOCH_WHERE_DROP_MESH_LR = [-1]  # Epoch where we set the mesh encoder to the sdf encoder learning rate
 EPOCH_WHERE_RESET_MIN_LOSS = [2, 3, 4]
 
@@ -142,7 +142,10 @@ CYCLE_ORDER = [Param.Both, Param.MeshEncoder, Param.SDFCalculator]  # Dynamic cy
 
 # --------------------------------- Latent Regularisation HyperParameter functions
 def alpha_latent(epoch: int) -> float:
-    return 0.0005 / (epoch + 1) ** (1.2)
+    if epoch < 200:
+        return 0.0005 / (epoch + 1) ** (1.4)
+    else:
+        return 0
 
 
 def alpha_sdf(epoch: int) -> float:
@@ -778,7 +781,8 @@ class TrainingContext:
 
         if mode == SaveMode.NowEpoch:
             print(f"\nNow Epoch, e: {self.previous_epoch_index}, t:{self.previous_time_index}\n")
-            epoch_index = self.previous_epoch_index
+            epoch_index = self.previous_epoch_index + 1
+            # because its the epoch we'll be restarting from. So, if we are working on epoch 5, then epoch 4 was previous, and well restart from 5.
             time_index = 0
             encoder_weights = self.previous_encoder_weights_epoch
             sdf_calculator_weights = self.previous_calculator_weights_epoch
