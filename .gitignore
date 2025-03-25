@@ -40,3 +40,7 @@ main/neural_weights_*/
 *.jpg
 *.pkl
 *.mp4
+
+
+
+**/.nvim-session/
