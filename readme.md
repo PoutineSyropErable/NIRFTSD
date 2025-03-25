@@ -24,7 +24,8 @@ But for now, it's nowhere near that, a proof of concept of the pipeline has been
 It needs some refactoring, and documentation, and updating misc stuff to be consistent with the code state, even if the code work.
 To be done later.
 
-Current Todo List:
+## Current Todo List:
+
 Add fourier features between physics simulation data generation and mesh encoding pipeline, so we'd encode a
 fourrier feature mapped of the point cloud, in a higher dimension.
 
