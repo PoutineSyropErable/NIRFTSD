@@ -1,9 +1,10 @@
-# Welcome to Neural Implicit Reduced Fixed Topology Solid Deformation
+# Neural Implicit Reduced Fixed Topology Solid Deformation
 
 The goal is to use neural network to speedup physics simulation of solid deformation.
+Fixed topology means it would need to be trained for different shape.
 
 The end project would have a pipeline of
-(Physics simulation parameter) -> Encoded simulations -> Sdf queries values -> screen space recreation.
+(Physics simulation parameter) --(simulation encoder)--> Encoded simulations --(octree sdf calculator)--> Sdf queries values --(opencl code)--> screen space recreation.
 
 It currently works with:
 
