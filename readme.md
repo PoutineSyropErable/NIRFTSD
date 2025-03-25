@@ -3,14 +3,13 @@
 The goal is to use neural network to speedup physics simulation of solid deformation.
 Fixed topology means it would need to be trained for different shape.
 
-The end project would have a pipeline of
+The end project would have a pipeline of:
+
 (Physics simulation parameter) --(simulation encoder)--> Encoded simulations --(octree sdf calculator)--> Sdf queries values --(opencl code)--> screen space recreation.
 
 It currently works with:
 
-(Phys sim parameters) ---(expensive physics simulation)----> list of points cloud --(mesh encoding)--> List of latent vectors
-"Comment" --(sdf calculator)--> list of sdfs values --(marching cube recreation)--> recreated shape
-"Comment" --(whatever 3d engine is used)--> screen space recreation
+(Phys sim parameters) ---(expensive physics simulation)----> list of points cloud --(mesh encoding)--> List of latent vectors --(sdf calculator)--> list of sdfs values --(marching cube recreation)--> recreated shape --(whatever 3d engine is used)--> screen space recreation
 
 Note: "comment is used to add newlines without wrapping. To be removed, just imagine it doesn't exist for now"
 since -- is a special markdown symbol
