@@ -1,7 +1,7 @@
 # Neural Implicit Reduced Fixed Topology Solid Deformation
 
 The goal is to use neural network to speedup physics simulation of solid deformation.
-Fixed topology means it would need to be trained for different shape.
+Fixed topology means it would need to be trained for different shape. I'm working on the stanford bunny
 
 The end project would have a pipeline of:
 
@@ -26,34 +26,32 @@ To be done later.
 
 ## Current Todo List:
 
-Add fourier features between physics simulation data generation and mesh encoding pipeline, so we'd encode a
-fourrier feature mapped of the point cloud, in a higher dimension.
+1. Add fourier features between physics simulation data generation and mesh encoding pipeline, so we'd en1code a
+   fourrier feature mapped of the point cloud, in a higher dimension. (To capture higher spatial frequencies) (more detail, less "mushed" look)
 
-Regenerate data for different head push position (Body force makes too minor a change), and remove redundants simulation.
-Only have points on the head, with normal /toward center direction force.
-No need for too "upward or downward", as it shouldn't change the head tilt that much.
+2. Regenerate data for different head push position (Body force makes too minor a change), and remove redundants simulation.
+   Only have points on the head, with normal /toward center direction force.
+   No need for too "upward or downward", as it shouldn't change the head tilt that much.
+   Keep the position/direction -> simulation.
 
-Keep the position/direction -> simulation.
+3. Then, Make it work with multiple simulaitons, by appending, changing on the batch size is setup (Same simulation one after another)
+   Then fine tune the cosine similairty penalty to work with ~ $||u_1 t - u_2 t||$ rather then just $$|t_2 - t_1|$$, so it can have context of
+   different simulations, as two different simulation pairs one should have different loss for similarity.
 
-Then, Make it work with multiple simulaitons, by appending, changing on the batch size is setup (Same simulation one after another)
-Then fine tune the cosine similairty penalty to work with ~ $||u_1 t - u_2 t||$ rather then just $$|t_2 - t_1|$$, so it can have context of
-different simulations, as two different simulation pairs one should have different loss for similarity.
+4. We'll have a trained mesh encoder and sdf calculator.
+   Then, replace the physics simulation -> Mesh encoder pipeline.
+   We can train an ,
+   Simulation argument (Force position, direction, norm) -> List of encoded mesh.  
+   Hence, $$\mathbb{R}^3 -> \mathbb{R}^{n * T_c}$$
+   Where n is the dimension of the reduced latent space, and T (t_capital) is the number of time indices (key frame in a simulation)
 
-We'll have a trained mesh encoder and sdf calculator.
-Then, replace the physics simulation -> Mesh encoder pipeline.
-We can train an ,
-Simulation argument (Force position, direction, norm) -> List of encoded mesh.  
-Hence, $$\mathbb{R}^3 -> \mathbb{R}^{n * T_c}$$
-Where n is the dimension of the reduced latent space, and T (t_capital) is the number of time indices (key frame in a simulation)
+5. Once this is donce, we can replace the sdf calculator to use an octree structures, allowing for faster calculations.
 
-Once this is donce, we can replace the sdf calculator to use an octree structures, allowing for faster calculations.
-
-Then, dump the weights of the mesh encoder and the sdf calculator into a readable file, and in (C++ And opencl (cuda equiv)), recreate whatever
-magic nvidia has to have the sdf -> 2d screen space (pixels) recreation of the shape.
-
-Skipping the
-sdf --(marching cube or ray/sphere marching/whatever)--> 3d world space --(projection)--> 2d screen space.
-Allowing for even more speed
+6. Then, dump the weights of the mesh encoder and the sdf calculator into a readable file, and in (C++ And opencl (cuda equiv)), recreate whatever
+   magic nvidia has to have the sdf -> 2d screen space (pixels) recreation of the shape.
+   This allows skipping the
+   sdf queries points --(marching cube or ray/sphere marching/whatever)--> 3d world space --(projection {from 3d engine})--> 2d screen space.
+   Allowing for even more speed
 
 ---
 
